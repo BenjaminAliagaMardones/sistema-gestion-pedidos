@@ -291,8 +291,6 @@ def generate_invoice_pdf(order, client, items, business_config) -> bytes:
          Paragraph(format_usd(order.total_tax_usd), total_value_style)],
         [Paragraph("Total Comisión USD:", total_label_style),
          Paragraph(format_usd(order.total_commission_usd), total_value_style)],
-        [Paragraph("Total Ganancia USD:", total_label_style),
-         Paragraph(format_usd(order.total_profit_usd), total_value_style)],
         [Paragraph("TOTAL USD:", grand_label_style),
          Paragraph(format_usd(order.total_usd), grand_value_style)],
         [Paragraph("TOTAL CLP:", final_label_style),
@@ -303,13 +301,13 @@ def generate_invoice_pdf(order, client, items, business_config) -> bytes:
     totals_table.setStyle(TableStyle([
         ("ALIGN", (0, 0), (-1, -1), "RIGHT"),
         ("PADDING", (0, 0), (-1, -1), 7),
-        ("ROWBACKGROUNDS", (0, 0), (-1, 2), [CREAM, WHITE, CREAM]),
-        ("BACKGROUND", (0, 3), (-1, 3), CREAM_DARK),
-        ("BACKGROUND", (0, 4), (-1, 4), PURPLE_DARK),
-        ("LINEABOVE", (0, 3), (-1, 3), 1.5, CORAL),
-        ("LINEABOVE", (0, 4), (-1, 4), 1, PURPLE_MID),
+        ("ROWBACKGROUNDS", (0, 0), (-1, 1), [CREAM, WHITE]),
+        ("BACKGROUND", (0, 2), (-1, 2), CREAM_DARK),
+        ("BACKGROUND", (0, 3), (-1, 3), PURPLE_DARK),
+        ("LINEABOVE", (0, 2), (-1, 2), 1.5, CORAL),
+        ("LINEABOVE", (0, 3), (-1, 3), 1, PURPLE_MID),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("GRID", (0, 0), (-1, 3), 0.5, GRAY_LINE),
+        ("GRID", (0, 0), (-1, 2), 0.5, GRAY_LINE),
     ]))
     elements.append(totals_table)
 

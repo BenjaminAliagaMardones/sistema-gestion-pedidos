@@ -20,21 +20,19 @@ function calcItem(item, rate) {
     const unit = base + tax + comm
     const finalUSD = unit * qty
     const finalCLP = finalUSD * (parseFloat(rate) || 900)
-    const profit = comm * qty
-    return { tax, comm, finalUSD, finalCLP, profit }
+    return { tax, comm, finalUSD, finalCLP }
 }
 
 function calcTotals(items, rate) {
-    let totalTax = 0, totalComm = 0, totalProfit = 0, totalUSD = 0, totalCLP = 0
+    let totalTax = 0, totalComm = 0, totalUSD = 0, totalCLP = 0
     items.forEach((item) => {
         const c = calcItem(item, rate)
         totalTax += c.tax * (parseInt(item.quantity) || 1)
         totalComm += c.comm * (parseInt(item.quantity) || 1)
-        totalProfit += c.profit
         totalUSD += c.finalUSD
         totalCLP += c.finalCLP
     })
-    return { totalTax, totalComm, totalProfit, totalUSD, totalCLP }
+    return { totalTax, totalComm, totalUSD, totalCLP }
 }
 
 const emptyOrder = {
@@ -514,10 +512,6 @@ export default function Orders() {
                                                         <span className="calc-value">${c.comm.toFixed(3)}</span>
                                                     </div>
                                                     <div className="calc-item">
-                                                        <span className="calc-label">Ganancia</span>
-                                                        <span className="calc-value">${c.profit.toFixed(3)}</span>
-                                                    </div>
-                                                    <div className="calc-item">
                                                         <span className="calc-label">Total USD</span>
                                                         <span className="calc-value" style={{ color: 'var(--primary)' }}>${c.finalUSD.toFixed(2)}</span>
                                                     </div>
@@ -536,8 +530,7 @@ export default function Orders() {
                             <div className="order-totals">
                                 <h4 style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Resumen del Pedido</h4>
                                 <div className="total-row"><span>Total Tax USD</span><span>${totals.totalTax.toFixed(2)}</span></div>
-                                <div className="total-row"><span>Total Comisión USD</span><span>${totals.totalComm.toFixed(2)}</span></div>
-                                <div className="total-row"><span>Total Ganancia USD</span><span style={{ color: 'var(--success)' }}>${totals.totalProfit.toFixed(2)}</span></div>
+                                <div className="total-row"><span>Total Comisión USD</span><span style={{ color: 'var(--success)' }}>${totals.totalComm.toFixed(2)}</span></div>
                                 <div className="total-row">
                                     <span>TOTAL USD</span>
                                     <span className="total-grand">${totals.totalUSD.toFixed(2)}</span>
