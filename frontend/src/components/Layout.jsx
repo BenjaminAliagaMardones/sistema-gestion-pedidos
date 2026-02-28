@@ -22,7 +22,7 @@ export default function Layout({ children }) {
         <div className="app-layout">
             <aside className="sidebar">
                 <div className="sidebar-logo">
-                    <h1>✦ Shoper</h1>
+                    <h1>✦ Kebexpo</h1>
                     <p>Panel de Gestión</p>
                 </div>
 

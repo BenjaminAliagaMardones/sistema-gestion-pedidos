@@ -5,7 +5,7 @@ import {
 } from 'recharts'
 import { getDashboardMetrics, getMonthlyData, getTopClients } from '../services/api'
 import {
-    DollarSign, TrendingUp, ShoppingBag, Users, Award, Calendar
+    DollarSign, TrendingUp, ShoppingBag, Users, Award, Calendar, Activity
 } from 'lucide-react'
 
 const formatUSD = (v) => `$${Number(v).toFixed(2)}`
@@ -16,6 +16,7 @@ export default function Dashboard() {
     const [monthly, setMonthly] = useState([])
     const [topClients, setTopClients] = useState([])
     const [loading, setLoading] = useState(true)
+    const [dollarRate, setDollarRate] = useState(null)
     const year = new Date().getFullYear()
 
     useEffect(() => {
@@ -28,6 +29,14 @@ export default function Dashboard() {
             setMonthly(mo.data)
             setTopClients(tc.data)
         }).finally(() => setLoading(false))
+
+        // Fetch live dollar rate
+        fetch('https://mindicador.cl/api/dolar')
+            .then(r => r.json())
+            .then(data => {
+                if (data?.serie?.length > 0) setDollarRate(data.serie[0].valor)
+            })
+            .catch(() => { })
     }, [])
 
     if (loading) return (
@@ -37,6 +46,7 @@ export default function Dashboard() {
     )
 
     const kpis = [
+        { label: 'Dólar Hoy', value: dollarRate ? `$${dollarRate.toLocaleString('es-CL', { minimumFractionDigits: 2 })}` : '...', sub: 'CLP / En vivo', icon: Activity, color: '#10B981', live: true },
         { label: 'Facturación Total', value: formatUSD(metrics?.total_revenue_usd || 0), sub: 'Total histórico', icon: DollarSign, color: '#6C63FF' },
         { label: 'Ganancias Totales', value: formatUSD(metrics?.total_profit_usd || 0), sub: 'Total histórico', icon: TrendingUp, color: '#10B981' },
         { label: 'Total Pedidos', value: metrics?.total_orders || 0, sub: 'Pedidos activos', icon: ShoppingBag, color: '#F59E0B' },
@@ -67,7 +77,21 @@ export default function Dashboard() {
                     return (
                         <div key={kpi.label} className="kpi-card" style={{ '--kpi-color': kpi.color }}>
                             <div className="kpi-icon"><Icon size={40} /></div>
-                            <div className="kpi-label">{kpi.label}</div>
+                            <div className="kpi-label">
+                                {kpi.label}
+                                {kpi.live && (
+                                    <span style={{
+                                        display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                        marginLeft: '6px', padding: '1px 6px', borderRadius: '99px',
+                                        background: 'rgba(16,185,129,0.15)', color: '#10B981',
+                                        fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase',
+                                        verticalAlign: 'middle'
+                                    }}>
+                                        <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#10B981', animation: 'ratePulse 2s ease-in-out infinite' }}></span>
+                                        Live
+                                    </span>
+                                )}
+                            </div>
                             <div className="kpi-value">{kpi.value}</div>
                             <div className="kpi-sub">{kpi.sub}</div>
                         </div>

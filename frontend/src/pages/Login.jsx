@@ -33,7 +33,7 @@ export default function Login() {
             <div className="login-card">
                 <div className="login-logo">
                     <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>✦</div>
-                    <h1>Shoper</h1>
+                    <h1>Kebexpo</h1>
                     <p>Sistema de Gestión de Pedidos</p>
                 </div>
 

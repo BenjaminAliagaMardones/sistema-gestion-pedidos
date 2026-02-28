@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getClients, createClient, updateClient, deleteClient } from '../services/api'
-import { Plus, Search, Edit2, Trash2, X, User, Phone, Mail, MapPin } from 'lucide-react'
+import { Plus, Search, Edit2, Trash2, X, User, Phone, Mail, MapPin, Eye, ShoppingBag } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useNavigate } from 'react-router-dom'
 
@@ -119,9 +119,9 @@ export default function Clients() {
                         </thead>
                         <tbody>
                             {clients.map((c) => (
-                                <tr key={c.id}>
+                                <tr key={c.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/pedidos?client_id=${c.id}&client_name=${encodeURIComponent(c.name)}`)}>
                                     <td>
-                                        <span style={{ fontWeight: 600 }}>{c.name}</span>
+                                        <span style={{ fontWeight: 600, color: 'var(--primary)', cursor: 'pointer' }}>{c.name}</span>
                                         {c.address && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{c.address}</div>}
                                     </td>
                                     <td>{c.phone}</td>
@@ -138,7 +138,10 @@ export default function Clients() {
                                         ${c.total_spent_usd.toFixed(2)}
                                     </td>
                                     <td>
-                                        <div className="flex gap-1">
+                                        <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                                            <button className="btn btn-primary btn-sm" title="Ver pedidos" onClick={() => navigate(`/pedidos?client_id=${c.id}&client_name=${encodeURIComponent(c.name)}`)}>
+                                                <ShoppingBag size={14} />
+                                            </button>
                                             <button className="btn btn-secondary btn-sm" title="Editar" onClick={() => openEdit(c)}>
                                                 <Edit2 size={14} />
                                             </button>

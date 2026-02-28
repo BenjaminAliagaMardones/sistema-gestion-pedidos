@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { getOrders, getClients, createOrder, updateOrder, deleteOrder, getOrderPdfUrl } from '../services/api'
-import { Plus, X, Trash2, FileDown, Edit2, ShoppingBag } from 'lucide-react'
+import { Plus, X, Trash2, FileDown, Edit2, ShoppingBag, ArrowLeft, Users, Filter } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const STATUS_OPTIONS = ['Pendiente', 'Comprado', 'Enviado', 'Entregado', 'Cancelado']
@@ -60,7 +60,8 @@ function getStatusBadgeClass(status) {
 }
 
 export default function Orders() {
-    const [searchParams] = useSearchParams()
+    const [searchParams, setSearchParams] = useSearchParams()
+    const navigate = useNavigate()
     const filterClientId = searchParams.get('client_id')
     const filterClientName = searchParams.get('client_name')
 
@@ -72,21 +73,29 @@ export default function Orders() {
     const [form, setForm] = useState(emptyOrder)
     const [saving, setSaving] = useState(false)
     const [statusEdit, setStatusEdit] = useState({}) // { orderId: newStatus }
+    const [filterStatus, setFilterStatus] = useState('Todos')
 
     const [currentRate, setCurrentRate] = useState('900')
     const [rateLoading, setRateLoading] = useState(false)
+    const [rateError, setRateError] = useState(false)
+    const [rateDate, setRateDate] = useState(null)
 
     useEffect(() => {
         const fetchRate = async () => {
             setRateLoading(true)
+            setRateError(false)
             try {
                 const res = await fetch('https://mindicador.cl/api/dolar')
+                if (!res.ok) throw new Error('API error')
                 const data = await res.json()
                 if (data?.serie?.length > 0) {
                     setCurrentRate(String(data.serie[0].valor))
+                    setRateDate(new Date(data.serie[0].fecha).toLocaleDateString('es-CL'))
                 }
             } catch (err) {
                 console.error('Error fetching exchange rate:', err)
+                setRateError(true)
+                toast.error('No se pudo obtener el precio del dólar. Usando tasa por defecto.')
             } finally {
                 setRateLoading(false)
             }
@@ -229,10 +238,35 @@ export default function Orders() {
         <div>
             <div className="page-header">
                 <div>
-                    <h2 className="page-title">Pedidos</h2>
+                    {filterClientName && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                            <button
+                                className="btn btn-secondary btn-sm"
+                                onClick={() => navigate('/clientes')}
+                                style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                            >
+                                <ArrowLeft size={14} />
+                                <Users size={14} />
+                                Volver a Clientes
+                            </button>
+                            <button
+                                className="btn btn-secondary btn-sm"
+                                onClick={() => setSearchParams({})}
+                                style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                            >
+                                <ShoppingBag size={14} />
+                                Ver todos los pedidos
+                            </button>
+                        </div>
+                    )}
+                    <h2 className="page-title">
+                        {filterClientName
+                            ? `Pedidos de ${decodeURIComponent(filterClientName)}`
+                            : 'Pedidos'}
+                    </h2>
                     {filterClientName && (
                         <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-                            Filtrado por: <strong style={{ color: 'var(--primary)' }}>{decodeURIComponent(filterClientName)}</strong>
+                            Mostrando pedidos exclusivos de este cliente
                         </p>
                     )}
                 </div>
@@ -241,75 +275,136 @@ export default function Orders() {
                 </button>
             </div>
 
-            {loading ? (
-                <div className="empty-state"><p>Cargando...</p></div>
-            ) : orders.length === 0 ? (
-                <div className="empty-state">
-                    <ShoppingBag size={48} />
-                    <h3>No hay pedidos</h3>
-                    <p>Crea el primer pedido</p>
+            {/* Live Dollar Rate Indicator */}
+            <div className="rate-indicator">
+                <div className="rate-indicator-left">
+                    <span className="rate-indicator-label">💵 Dólar Observado (USD → CLP)</span>
+                    {rateLoading ? (
+                        <span className="rate-indicator-value rate-loading">Cargando...</span>
+                    ) : rateError ? (
+                        <span className="rate-indicator-value rate-error">Error — usando $900</span>
+                    ) : (
+                        <span className="rate-indicator-value rate-live">
+                            ${parseFloat(currentRate).toLocaleString('es-CL', { minimumFractionDigits: 2 })}
+                        </span>
+                    )}
                 </div>
-            ) : (
-                <div className="table-container">
-                    <table className="table">
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Cliente</th>
-                                <th>Fecha</th>
-                                <th>Estado</th>
-                                <th>Banco / Pago</th>
-                                <th>Total USD</th>
-                                <th>Total CLP</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {orders.map((o) => (
-                                <tr key={o.id}>
-                                    <td style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                        #{o.id.slice(0, 8).toUpperCase()}
-                                    </td>
-                                    <td style={{ fontWeight: 600 }}>{o.client?.name || '—'}</td>
-                                    <td style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-                                        {o.order_date ? new Date(o.order_date).toLocaleDateString('es-CL') : '—'}
-                                    </td>
-                                    <td>
-                                        <select
-                                            className="badge"
-                                            style={{ border: 'none', cursor: 'pointer', background: 'transparent' }}
-                                            value={o.status}
-                                            onChange={(e) => handleStatusChange(o.id, e.target.value)}
-                                        >
-                                            {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-                                        </select>
-                                    </td>
-                                    <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                                        {o.payment_bank || '—'}{o.payment_method ? ` / ${o.payment_method}` : ''}
-                                    </td>
-                                    <td style={{ color: 'var(--success)', fontWeight: 700 }}>${o.total_usd.toFixed(2)}</td>
-                                    <td style={{ fontWeight: 600 }}>
-                                        ${Math.floor(o.total_clp).toLocaleString('es-CL')}
-                                    </td>
-                                    <td>
-                                        <div className="flex gap-1">
-                                            <button className="btn btn-secondary btn-sm" title="Editar" onClick={() => openEdit(o)}>
-                                                <Edit2 size={14} />
-                                            </button>
-                                            <button className="btn btn-success btn-sm" title="Descargar PDF" onClick={() => downloadPdf(o.id)}>
-                                                <FileDown size={14} />
-                                            </button>
-                                            <button className="btn btn-danger btn-sm" title="Eliminar" onClick={() => handleDelete(o.id)}>
-                                                <Trash2 size={14} />
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                <div className="rate-indicator-right">
+                    {!rateLoading && !rateError && (
+                        <span className="rate-indicator-badge">
+                            <span className="rate-dot"></span>
+                            En vivo
+                        </span>
+                    )}
+                    {rateDate && !rateError && (
+                        <span className="rate-indicator-date">Actualizado: {rateDate}</span>
+                    )}
+                </div>
+            </div>
+
+            {/* Status Filter Tabs */}
+            {!loading && orders.length > 0 && (
+                <div className="status-filter-bar">
+                    <Filter size={15} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                    {['Todos', ...STATUS_OPTIONS].map((status) => {
+                        const count = status === 'Todos'
+                            ? orders.length
+                            : orders.filter((o) => o.status === status).length
+                        return (
+                            <button
+                                key={status}
+                                className={`status-filter-tab ${filterStatus === status ? 'active' : ''} ${status !== 'Todos' ? `tab-${status.toLowerCase()}` : ''}`}
+                                onClick={() => setFilterStatus(status)}
+                            >
+                                {status}
+                                <span className="status-filter-count">{count}</span>
+                            </button>
+                        )
+                    })}
                 </div>
             )}
+
+            {(() => {
+                const filteredOrders = filterStatus === 'Todos'
+                    ? orders
+                    : orders.filter((o) => o.status === filterStatus)
+
+                return loading ? (
+                    <div className="empty-state"><p>Cargando...</p></div>
+                ) : orders.length === 0 ? (
+                    <div className="empty-state">
+                        <ShoppingBag size={48} />
+                        <h3>No hay pedidos</h3>
+                        <p>Crea el primer pedido</p>
+                    </div>
+                ) : filteredOrders.length === 0 ? (
+                    <div className="empty-state">
+                        <ShoppingBag size={48} />
+                        <h3>No hay pedidos con estado "{filterStatus}"</h3>
+                        <p>Cambia el filtro para ver otros pedidos</p>
+                    </div>
+                ) : (
+                    <div className="table-container">
+                        <table className="table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Cliente</th>
+                                    <th>Fecha</th>
+                                    <th>Estado</th>
+                                    <th>Banco / Pago</th>
+                                    <th>Total USD</th>
+                                    <th>Total CLP</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {filteredOrders.map((o) => (
+                                    <tr key={o.id}>
+                                        <td style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                            #{o.id.slice(0, 8).toUpperCase()}
+                                        </td>
+                                        <td style={{ fontWeight: 600 }}>{o.client?.name || '—'}</td>
+                                        <td style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                                            {o.order_date ? new Date(o.order_date).toLocaleDateString('es-CL') : '—'}
+                                        </td>
+                                        <td>
+                                            <select
+                                                className={`badge ${getStatusBadgeClass(o.status)}`}
+                                                style={{ border: 'none', cursor: 'pointer', fontWeight: 700 }}
+                                                value={o.status}
+                                                onChange={(e) => handleStatusChange(o.id, e.target.value)}
+                                            >
+                                                {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+                                            </select>
+                                        </td>
+                                        <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                            {o.payment_bank || '—'}{o.payment_method ? ` / ${o.payment_method}` : ''}
+                                        </td>
+                                        <td style={{ color: 'var(--success)', fontWeight: 700 }}>${o.total_usd.toFixed(2)}</td>
+                                        <td style={{ fontWeight: 600 }}>
+                                            ${Math.floor(o.total_clp).toLocaleString('es-CL')}
+                                        </td>
+                                        <td>
+                                            <div className="flex gap-1">
+                                                <button className="btn btn-secondary btn-sm" title="Editar" onClick={() => openEdit(o)}>
+                                                    <Edit2 size={14} />
+                                                </button>
+                                                <button className="btn btn-success btn-sm" title="Descargar PDF" onClick={() => downloadPdf(o.id)}>
+                                                    <FileDown size={14} />
+                                                </button>
+                                                <button className="btn btn-danger btn-sm" title="Eliminar" onClick={() => handleDelete(o.id)}>
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )
+            })()}
 
             {/* ORDER FORM MODAL */}
             {showModal && (

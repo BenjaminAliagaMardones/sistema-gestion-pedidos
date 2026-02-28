@@ -10,13 +10,17 @@ from reportlab.platypus import (
 )
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 
-# Colores corporativos
-PRIMARY_COLOR = colors.HexColor("#6C63FF")
-SECONDARY_COLOR = colors.HexColor("#2D2D44")
-LIGHT_GRAY = colors.HexColor("#F5F5F5")
-MEDIUM_GRAY = colors.HexColor("#888888")
+# ─── KEBEXPO BRAND COLORS ───────────────────────────────
+PURPLE_DARK = colors.HexColor("#2D1B5E")      # Primary dark purple
+PURPLE_MID = colors.HexColor("#3D2B6E")        # Slightly lighter purple
+CORAL = colors.HexColor("#E8637A")              # Coral/pink accent
+CORAL_LIGHT = colors.HexColor("#F8A4B0")        # Light coral
+CREAM = colors.HexColor("#FFF8F0")              # Cream background
+CREAM_DARK = colors.HexColor("#FDEBD0")         # Slightly darker cream
 WHITE = colors.white
-DARK = colors.HexColor("#1A1A2E")
+GRAY_TEXT = colors.HexColor("#5D5D7A")          # Muted text
+GRAY_LINE = colors.HexColor("#E0D6CC")          # Subtle borders
+DARK_TEXT = colors.HexColor("#1A1A2E")          # Body text
 
 
 def format_clp(value: float) -> str:
@@ -28,7 +32,7 @@ def format_usd(value: float) -> str:
 
 
 def generate_invoice_pdf(order, client, items, business_config) -> bytes:
-    """Genera el PDF de la boleta y retorna los bytes."""
+    """Genera el PDF de la boleta con estilo Kebexpo."""
     buffer = io.BytesIO()
 
     doc = SimpleDocTemplate(
@@ -40,60 +44,94 @@ def generate_invoice_pdf(order, client, items, business_config) -> bytes:
         bottomMargin=1.5 * cm,
     )
 
-    styles = getSampleStyleSheet()
     elements = []
 
-    # --- ENCABEZADO ---
-    header_data = []
-    
-    # Logo
+    # ─── STYLES ──────────────────────────────────────────
+    title_style = ParagraphStyle(
+        "KebTitle",
+        fontName="Helvetica-Bold",
+        fontSize=24,
+        textColor=PURPLE_DARK,
+        alignment=TA_LEFT,
+        leading=28,
+    )
+    subtitle_style = ParagraphStyle(
+        "KebSubtitle",
+        fontName="Helvetica",
+        fontSize=10,
+        textColor=CORAL,
+        alignment=TA_LEFT,
+        leading=14,
+    )
+    section_style = ParagraphStyle(
+        "KebSection",
+        fontName="Helvetica-Bold",
+        fontSize=11,
+        textColor=WHITE,
+        spaceBefore=0.4 * cm,
+        spaceAfter=0.3 * cm,
+    )
+    info_style = ParagraphStyle(
+        "KebInfo",
+        fontName="Helvetica",
+        fontSize=9,
+        textColor=DARK_TEXT,
+        leading=14,
+    )
+    bold_style = ParagraphStyle(
+        "KebBold",
+        fontName="Helvetica-Bold",
+        fontSize=9,
+        textColor=PURPLE_DARK,
+    )
+    header_right_style = ParagraphStyle(
+        "KebHeaderRight",
+        fontName="Helvetica-Bold",
+        fontSize=12,
+        textColor=CORAL,
+        alignment=TA_RIGHT,
+    )
+    header_right_sub = ParagraphStyle(
+        "KebHeaderRightSub",
+        fontName="Helvetica",
+        fontSize=9,
+        textColor=GRAY_TEXT,
+        alignment=TA_RIGHT,
+        leading=14,
+    )
+
+    # ─── HEADER ──────────────────────────────────────────
+    # Top accent bar (simulated with a colored table row)
+    accent_bar = Table(
+        [[""]], colWidths=[18 * cm], rowHeights=[0.3 * cm]
+    )
+    accent_bar.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), PURPLE_DARK),
+        ("LINEBELOW", (0, 0), (-1, -1), 3, CORAL),
+    ]))
+    elements.append(accent_bar)
+    elements.append(Spacer(1, 0.5 * cm))
+
+    # Logo + Business Name
     logo_cell = ""
     if business_config and business_config.logo_path and os.path.exists(business_config.logo_path):
         try:
-            img = Image(business_config.logo_path, width=3*cm, height=3*cm, kind='proportional')
+            img = Image(business_config.logo_path, width=3.2 * cm, height=3.2 * cm, kind='proportional')
             logo_cell = img
         except Exception:
             logo_cell = ""
 
-    business_name = business_config.business_name if business_config else "Mi Negocio"
-
-    title_style = ParagraphStyle(
-        "Title",
-        fontName="Helvetica-Bold",
-        fontSize=22,
-        textColor=PRIMARY_COLOR,
-        alignment=TA_LEFT,
-    )
-    subtitle_style = ParagraphStyle(
-        "Subtitle",
-        fontName="Helvetica",
-        fontSize=10,
-        textColor=MEDIUM_GRAY,
-        alignment=TA_LEFT,
-    )
-    header_right_style = ParagraphStyle(
-        "HeaderRight",
-        fontName="Helvetica-Bold",
-        fontSize=11,
-        textColor=SECONDARY_COLOR,
-        alignment=TA_RIGHT,
-    )
-    header_right_sub = ParagraphStyle(
-        "HeaderRightSub",
-        fontName="Helvetica",
-        fontSize=9,
-        textColor=MEDIUM_GRAY,
-        alignment=TA_RIGHT,
-    )
+    business_name = business_config.business_name if business_config else "Kebexpo"
 
     left_content = [
-        [logo_cell if logo_cell else Spacer(1, 0.1*cm)],
+        [logo_cell if logo_cell else Spacer(1, 0.1 * cm)],
         [Paragraph(business_name, title_style)],
-        [Paragraph("Sistema de Gestión de Pedidos", subtitle_style)],
+        [Paragraph("Importaciones & Envíos USA → Chile", subtitle_style)],
     ]
 
     right_content = [
         [Paragraph("BOLETA DE PEDIDO", header_right_style)],
+        [Spacer(1, 0.2 * cm)],
         [Paragraph(f"Fecha: {order.order_date.strftime('%d/%m/%Y') if order.order_date else datetime.now().strftime('%d/%m/%Y')}", header_right_sub)],
         [Paragraph(f"N° Pedido: {str(order.id)[:8].upper()}", header_right_sub)],
         [Paragraph(f"Estado: {order.status.value}", header_right_sub)],
@@ -101,10 +139,10 @@ def generate_invoice_pdf(order, client, items, business_config) -> bytes:
 
     header_table = Table(
         [[
-            Table(left_content, colWidths=[10*cm]),
-            Table(right_content, colWidths=[8*cm])
+            Table(left_content, colWidths=[10 * cm]),
+            Table(right_content, colWidths=[8 * cm])
         ]],
-        colWidths=[10*cm, 8*cm]
+        colWidths=[10 * cm, 8 * cm]
     )
     header_table.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
@@ -112,32 +150,29 @@ def generate_invoice_pdf(order, client, items, business_config) -> bytes:
         ("RIGHTPADDING", (0, 0), (-1, -1), 0),
     ]))
     elements.append(header_table)
-    elements.append(HRFlowable(width="100%", thickness=2, color=PRIMARY_COLOR, spaceAfter=0.5*cm, spaceBefore=0.5*cm))
+    elements.append(Spacer(1, 0.3 * cm))
 
-    # --- INFORMACIÓN DEL CLIENTE ---
-    section_style = ParagraphStyle(
-        "Section",
-        fontName="Helvetica-Bold",
-        fontSize=11,
-        textColor=PRIMARY_COLOR,
-        spaceBefore=0.3*cm,
-        spaceAfter=0.2*cm,
-    )
-    info_style = ParagraphStyle(
-        "Info",
-        fontName="Helvetica",
-        fontSize=9,
-        textColor=SECONDARY_COLOR,
-        leading=14,
-    )
-    bold_style = ParagraphStyle(
-        "Bold",
-        fontName="Helvetica-Bold",
-        fontSize=9,
-        textColor=DARK,
-    )
+    # Divider line (coral gradient effect)
+    elements.append(HRFlowable(
+        width="100%", thickness=2, color=CORAL,
+        spaceAfter=0.5 * cm, spaceBefore=0.2 * cm
+    ))
 
-    elements.append(Paragraph("INFORMACIÓN DEL CLIENTE", section_style))
+    # ─── CLIENT INFO ─────────────────────────────────────
+    # Section header with purple background
+    section_header = Table(
+        [[Paragraph("  INFORMACIÓN DEL CLIENTE", section_style)]],
+        colWidths=[18 * cm], rowHeights=[0.7 * cm]
+    )
+    section_header.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), PURPLE_DARK),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+    ]))
+    elements.append(section_header)
+
     client_data = [
         [Paragraph("Nombre:", bold_style), Paragraph(client.name, info_style),
          Paragraph("Banco:", bold_style), Paragraph(order.payment_bank or "—", info_style)],
@@ -149,31 +184,43 @@ def generate_invoice_pdf(order, client, items, business_config) -> bytes:
          Paragraph("", info_style), Paragraph("", info_style)],
     ]
 
-    client_table = Table(client_data, colWidths=[3*cm, 6*cm, 4*cm, 5*cm])
+    client_table = Table(client_data, colWidths=[3 * cm, 6 * cm, 4 * cm, 5 * cm])
     client_table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), LIGHT_GRAY),
-        ("ROWBACKGROUNDS", (0, 0), (-1, -1), [WHITE, LIGHT_GRAY]),
+        ("BACKGROUND", (0, 0), (-1, -1), CREAM),
+        ("ROWBACKGROUNDS", (0, 0), (-1, -1), [CREAM, WHITE]),
         ("PADDING", (0, 0), (-1, -1), 6),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#DDDDDD")),
+        ("GRID", (0, 0), (-1, -1), 0.5, GRAY_LINE),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LINEABOVE", (0, 0), (-1, 0), 0, WHITE),  # hide top border (section header covers it)
     ]))
     elements.append(client_table)
-    elements.append(Spacer(1, 0.5*cm))
+    elements.append(Spacer(1, 0.6 * cm))
 
-    # --- TABLA DE PRODUCTOS ---
-    elements.append(Paragraph("DETALLE DE PRODUCTOS", section_style))
+    # ─── PRODUCTS TABLE ──────────────────────────────────
+    product_header = Table(
+        [[Paragraph("  DETALLE DE PRODUCTOS", section_style)]],
+        colWidths=[18 * cm], rowHeights=[0.7 * cm]
+    )
+    product_header.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), PURPLE_DARK),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+    ]))
+    elements.append(product_header)
 
     col_header_style = ParagraphStyle(
-        "ColHeader", fontName="Helvetica-Bold", fontSize=8, textColor=WHITE, alignment=TA_CENTER
+        "ColHeader", fontName="Helvetica-Bold", fontSize=7.5, textColor=PURPLE_DARK, alignment=TA_CENTER
     )
     cell_right = ParagraphStyle(
-        "CellRight", fontName="Helvetica", fontSize=8, textColor=SECONDARY_COLOR, alignment=TA_RIGHT
+        "CellRight", fontName="Helvetica", fontSize=8, textColor=DARK_TEXT, alignment=TA_RIGHT
     )
     cell_center = ParagraphStyle(
-        "CellCenter", fontName="Helvetica", fontSize=8, textColor=SECONDARY_COLOR, alignment=TA_CENTER
+        "CellCenter", fontName="Helvetica", fontSize=8, textColor=DARK_TEXT, alignment=TA_CENTER
     )
     cell_left = ParagraphStyle(
-        "CellLeft", fontName="Helvetica", fontSize=8, textColor=SECONDARY_COLOR, alignment=TA_LEFT
+        "CellLeft", fontName="Helvetica", fontSize=8, textColor=DARK_TEXT, alignment=TA_LEFT
     )
 
     prod_headers = [
@@ -204,67 +251,127 @@ def generate_invoice_pdf(order, client, items, business_config) -> bytes:
 
     prod_table = Table(
         prod_data,
-        colWidths=[4.5*cm, 2.3*cm, 1.5*cm, 2*cm, 1.7*cm, 2*cm, 1.3*cm, 2.2*cm, 2.5*cm],
+        colWidths=[4.5 * cm, 2.3 * cm, 1.5 * cm, 2 * cm, 1.7 * cm, 2 * cm, 1.3 * cm, 2.2 * cm, 2.5 * cm],
         repeatRows=1
     )
     prod_table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), PRIMARY_COLOR),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [WHITE, LIGHT_GRAY]),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#DDDDDD")),
+        ("BACKGROUND", (0, 0), (-1, 0), CREAM_DARK),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [WHITE, CREAM]),
+        ("GRID", (0, 0), (-1, -1), 0.5, GRAY_LINE),
         ("PADDING", (0, 0), (-1, -1), 5),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ("LINEBELOW", (0, 0), (-1, 0), 1, CORAL),
     ]))
     elements.append(prod_table)
-    elements.append(Spacer(1, 0.5*cm))
+    elements.append(Spacer(1, 0.6 * cm))
 
-    # --- TOTALES ---
-    elements.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#DDDDDD"), spaceAfter=0.3*cm))
-
+    # ─── TOTALS ──────────────────────────────────────────
     total_label_style = ParagraphStyle(
-        "TotalLabel", fontName="Helvetica", fontSize=10, textColor=SECONDARY_COLOR, alignment=TA_RIGHT
+        "TotalLabel", fontName="Helvetica", fontSize=10, textColor=GRAY_TEXT, alignment=TA_RIGHT
     )
     total_value_style = ParagraphStyle(
-        "TotalValue", fontName="Helvetica-Bold", fontSize=10, textColor=DARK, alignment=TA_RIGHT
+        "TotalValue", fontName="Helvetica-Bold", fontSize=10, textColor=DARK_TEXT, alignment=TA_RIGHT
     )
-    grand_total_style = ParagraphStyle(
-        "GrandTotal", fontName="Helvetica-Bold", fontSize=13, textColor=WHITE, alignment=TA_RIGHT
+    grand_label_style = ParagraphStyle(
+        "GrandLabel", fontName="Helvetica-Bold", fontSize=11, textColor=PURPLE_DARK, alignment=TA_RIGHT
+    )
+    grand_value_style = ParagraphStyle(
+        "GrandValue", fontName="Helvetica-Bold", fontSize=11, textColor=PURPLE_DARK, alignment=TA_RIGHT
+    )
+    final_label_style = ParagraphStyle(
+        "FinalLabel", fontName="Helvetica-Bold", fontSize=14, textColor=WHITE, alignment=TA_RIGHT
+    )
+    final_value_style = ParagraphStyle(
+        "FinalValue", fontName="Helvetica-Bold", fontSize=14, textColor=WHITE, alignment=TA_RIGHT
     )
 
     totals_data = [
-        [Paragraph("Total Tax USD:", total_label_style), Paragraph(format_usd(order.total_tax_usd), total_value_style)],
-        [Paragraph("Total Comisión USD:", total_label_style), Paragraph(format_usd(order.total_commission_usd), total_value_style)],
-        [Paragraph("Total Ganancia USD:", total_label_style), Paragraph(format_usd(order.total_profit_usd), total_value_style)],
-        [Paragraph("TOTAL USD:", ParagraphStyle("TG1", fontName="Helvetica-Bold", fontSize=11, textColor=PRIMARY_COLOR, alignment=TA_RIGHT)),
-         Paragraph(format_usd(order.total_usd), ParagraphStyle("TG2", fontName="Helvetica-Bold", fontSize=11, textColor=PRIMARY_COLOR, alignment=TA_RIGHT))],
-        [Paragraph("TOTAL CLP:", ParagraphStyle("TG3", fontName="Helvetica-Bold", fontSize=13, textColor=WHITE, alignment=TA_RIGHT)),
-         Paragraph(format_clp(order.total_clp), ParagraphStyle("TG4", fontName="Helvetica-Bold", fontSize=13, textColor=WHITE, alignment=TA_RIGHT))],
+        [Paragraph("Total Tax USD:", total_label_style),
+         Paragraph(format_usd(order.total_tax_usd), total_value_style)],
+        [Paragraph("Total Comisión USD:", total_label_style),
+         Paragraph(format_usd(order.total_commission_usd), total_value_style)],
+        [Paragraph("Total Ganancia USD:", total_label_style),
+         Paragraph(format_usd(order.total_profit_usd), total_value_style)],
+        [Paragraph("TOTAL USD:", grand_label_style),
+         Paragraph(format_usd(order.total_usd), grand_value_style)],
+        [Paragraph("TOTAL CLP:", final_label_style),
+         Paragraph(format_clp(order.total_clp), final_value_style)],
     ]
 
-    totals_table = Table(totals_data, colWidths=[12*cm, 6*cm])
+    totals_table = Table(totals_data, colWidths=[12 * cm, 6 * cm])
     totals_table.setStyle(TableStyle([
         ("ALIGN", (0, 0), (-1, -1), "RIGHT"),
-        ("PADDING", (0, 0), (-1, -1), 6),
-        ("BACKGROUND", (0, 4), (-1, 4), PRIMARY_COLOR),
-        ("ROWBACKGROUNDS", (0, 0), (-1, 3), [WHITE, LIGHT_GRAY, WHITE, LIGHT_GRAY]),
-        ("LINEABOVE", (0, 3), (-1, 3), 1, PRIMARY_COLOR),
+        ("PADDING", (0, 0), (-1, -1), 7),
+        ("ROWBACKGROUNDS", (0, 0), (-1, 2), [CREAM, WHITE, CREAM]),
+        ("BACKGROUND", (0, 3), (-1, 3), CREAM_DARK),
+        ("BACKGROUND", (0, 4), (-1, 4), PURPLE_DARK),
+        ("LINEABOVE", (0, 3), (-1, 3), 1.5, CORAL),
+        ("LINEABOVE", (0, 4), (-1, 4), 1, PURPLE_MID),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("GRID", (0, 0), (-1, 3), 0.5, GRAY_LINE),
     ]))
     elements.append(totals_table)
 
-    # --- OBSERVACIONES ---
+    # ─── NOTES ───────────────────────────────────────────
     if order.notes:
-        elements.append(Spacer(1, 0.5*cm))
-        elements.append(Paragraph("OBSERVACIONES", section_style))
-        elements.append(Paragraph(order.notes, info_style))
+        elements.append(Spacer(1, 0.5 * cm))
+        notes_header = Table(
+            [[Paragraph("  OBSERVACIONES", section_style)]],
+            colWidths=[18 * cm], rowHeights=[0.7 * cm]
+        )
+        notes_header.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), PURPLE_DARK),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+            ("TOPPADDING", (0, 0), (-1, -1), 2),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ]))
+        elements.append(notes_header)
+        notes_box = Table(
+            [[Paragraph(order.notes, info_style)]],
+            colWidths=[18 * cm]
+        )
+        notes_box.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), CREAM),
+            ("PADDING", (0, 0), (-1, -1), 10),
+            ("GRID", (0, 0), (-1, -1), 0.5, GRAY_LINE),
+        ]))
+        elements.append(notes_box)
 
-    # --- PIE DE PÁGINA ---
-    elements.append(Spacer(1, 1*cm))
-    elements.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#DDDDDD"), spaceAfter=0.3*cm))
+    # ─── FOOTER ──────────────────────────────────────────
+    elements.append(Spacer(1, 1 * cm))
+
+    # Footer divider
+    elements.append(HRFlowable(
+        width="100%", thickness=1, color=CORAL,
+        spaceAfter=0.3 * cm
+    ))
+
     footer_style = ParagraphStyle(
-        "Footer", fontName="Helvetica", fontSize=8, textColor=MEDIUM_GRAY, alignment=TA_CENTER
+        "KebFooter", fontName="Helvetica", fontSize=8, textColor=GRAY_TEXT, alignment=TA_CENTER,
+        leading=12,
     )
-    elements.append(Paragraph(f"Documento generado el {datetime.now().strftime('%d/%m/%Y %H:%M')} | {business_name}", footer_style))
+    footer_bold = ParagraphStyle(
+        "KebFooterBold", fontName="Helvetica-Bold", fontSize=8, textColor=PURPLE_DARK, alignment=TA_CENTER,
+    )
+
+    elements.append(Paragraph(f"{business_name}", footer_bold))
+    elements.append(Paragraph(
+        f"Documento generado el {datetime.now().strftime('%d/%m/%Y %H:%M')} | Importaciones USA → Chile",
+        footer_style
+    ))
+    elements.append(Paragraph("Gracias por su preferencia ✦", footer_style))
+
+    # Bottom accent bar
+    elements.append(Spacer(1, 0.3 * cm))
+    bottom_bar = Table(
+        [[""]], colWidths=[18 * cm], rowHeights=[0.2 * cm]
+    )
+    bottom_bar.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), CORAL),
+    ]))
+    elements.append(bottom_bar)
 
     doc.build(elements)
     buffer.seek(0)
