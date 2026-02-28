@@ -73,6 +73,27 @@ export default function Orders() {
     const [saving, setSaving] = useState(false)
     const [statusEdit, setStatusEdit] = useState({}) // { orderId: newStatus }
 
+    const [currentRate, setCurrentRate] = useState('900')
+    const [rateLoading, setRateLoading] = useState(false)
+
+    useEffect(() => {
+        const fetchRate = async () => {
+            setRateLoading(true)
+            try {
+                const res = await fetch('https://mindicador.cl/api/dolar')
+                const data = await res.json()
+                if (data?.serie?.length > 0) {
+                    setCurrentRate(String(data.serie[0].valor))
+                }
+            } catch (err) {
+                console.error('Error fetching exchange rate:', err)
+            } finally {
+                setRateLoading(false)
+            }
+        }
+        fetchRate()
+    }, [])
+
     const fetchOrders = useCallback(async () => {
         try {
             const params = filterClientId ? { client_id: filterClientId } : {}
@@ -92,7 +113,7 @@ export default function Orders() {
 
     const openCreate = () => {
         setEditingOrder(null)
-        setForm({ ...emptyOrder, client_id: filterClientId || '', items: [{ ...emptyItem }] })
+        setForm({ ...emptyOrder, client_id: filterClientId || '', items: [{ ...emptyItem }], exchange_rate: currentRate })
         setShowModal(true)
     }
 
@@ -330,8 +351,12 @@ export default function Orders() {
                                     </select>
                                 </div>
                                 <div className="form-group">
-                                    <label className="form-label">Tasa USD → CLP *</label>
-                                    <input type="number" className="form-input" placeholder="950" value={form.exchange_rate} onChange={(e) => setForm({ ...form, exchange_rate: e.target.value })} />
+                                    <label className="form-label">
+                                        Tasa USD → CLP *
+                                        {rateLoading && <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: '0.5rem' }}>(Actualizando...)</span>}
+                                        {!rateLoading && currentRate !== '900' && !editingOrder && <span style={{ fontSize: '0.75rem', color: 'var(--success)', marginLeft: '0.5rem' }}>(Precio real)</span>}
+                                    </label>
+                                    <input type="number" step="0.01" className="form-input" placeholder="950" value={form.exchange_rate} onChange={(e) => setForm({ ...form, exchange_rate: e.target.value })} />
                                 </div>
                                 <div className="form-group">
                                     <label className="form-label">Fecha del Pedido</label>
