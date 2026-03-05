@@ -12,5 +12,5 @@ class BusinessConfig(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), unique=True, nullable=False)
     business_name = Column(String(200), default="Mi Negocio")
     logo_path = Column(String(500), nullable=True)
-    default_exchange_rate = Column(Float, default=900.0)
+
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())

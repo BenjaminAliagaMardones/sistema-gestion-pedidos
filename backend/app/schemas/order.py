@@ -2,7 +2,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 from uuid import UUID
-from app.models.order import OrderStatus
+from app.models.order import OrderStatus, PaymentStatus
 
 
 class OrderItemCreate(BaseModel):
@@ -23,7 +23,6 @@ class OrderItemResponse(BaseModel):
     tax_amount_usd: float
     commission_amount_usd: float
     final_price_usd: float
-    final_price_clp: float
     profit_usd: float
 
     class Config:
@@ -32,21 +31,25 @@ class OrderItemResponse(BaseModel):
 
 class OrderCreate(BaseModel):
     client_id: UUID
-    status: OrderStatus = OrderStatus.pendiente
+    payment_status: PaymentStatus = PaymentStatus.pendiente
+    order_status: OrderStatus = OrderStatus.en_bodega
+    tracking_number: Optional[str] = None
+    shipping_cost_usd: float = 0.0
     payment_bank: Optional[str] = None
     payment_method: Optional[str] = None
     notes: Optional[str] = None
-    exchange_rate: float = 900.0
     order_date: Optional[datetime] = None
     items: List[OrderItemCreate]
 
 
 class OrderUpdate(BaseModel):
-    status: Optional[OrderStatus] = None
+    payment_status: Optional[PaymentStatus] = None
+    order_status: Optional[OrderStatus] = None
+    tracking_number: Optional[str] = None
+    shipping_cost_usd: Optional[float] = None
     payment_bank: Optional[str] = None
     payment_method: Optional[str] = None
     notes: Optional[str] = None
-    exchange_rate: Optional[float] = None
     order_date: Optional[datetime] = None
     items: Optional[List[OrderItemCreate]] = None
 
@@ -64,18 +67,19 @@ class OrderResponse(BaseModel):
     id: UUID
     client_id: UUID
     client: Optional[ClientOrderInfo]
-    status: OrderStatus
+    payment_status: PaymentStatus
+    order_status: OrderStatus
+    tracking_number: Optional[str]
+    shipping_cost_usd: float
     payment_bank: Optional[str]
     payment_method: Optional[str]
     notes: Optional[str]
-    exchange_rate: float
     order_date: datetime
     created_at: datetime
     total_tax_usd: float
     total_commission_usd: float
     total_profit_usd: float
     total_usd: float
-    total_clp: float
     items: List[OrderItemResponse]
 
     class Config:

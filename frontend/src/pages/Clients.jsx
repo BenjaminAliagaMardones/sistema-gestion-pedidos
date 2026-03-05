@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getClients, createClient, updateClient, deleteClient } from '../services/api'
+import { useCachedQuery, invalidateCache } from '../hooks/useCache'
 import { Plus, Search, Edit2, Trash2, X, User, Phone, Mail, MapPin, Eye, ShoppingBag } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useNavigate } from 'react-router-dom'
@@ -7,30 +8,20 @@ import { useNavigate } from 'react-router-dom'
 const emptyForm = { name: '', phone: '', email: '', address: '' }
 
 export default function Clients() {
-    const [clients, setClients] = useState([])
     const [search, setSearch] = useState('')
-    const [loading, setLoading] = useState(true)
     const [showModal, setShowModal] = useState(false)
     const [editing, setEditing] = useState(null)
     const [form, setForm] = useState(emptyForm)
     const [saving, setSaving] = useState(false)
     const navigate = useNavigate()
 
-    const fetchClients = useCallback(async () => {
-        try {
-            const res = await getClients(search)
-            setClients(res.data)
-        } catch {
-            toast.error('Error al cargar clientes')
-        } finally {
-            setLoading(false)
-        }
-    }, [search])
-
-    useEffect(() => {
-        const t = setTimeout(fetchClients, 300)
-        return () => clearTimeout(t)
-    }, [fetchClients])
+    // Cached query para clientes (search tiene su propio cache key)
+    const cacheKey = search ? `clients-search-${search}` : 'clients'
+    const { data: clients, loading, refetch } = useCachedQuery(
+        cacheKey,
+        () => getClients(search),
+        { deps: [search], staleTime: search ? 30000 : 5 * 60 * 1000 } // Search results cache 30s, all clients 5min
+    )
 
     const openCreate = () => { setEditing(null); setForm(emptyForm); setShowModal(true) }
     const openEdit = (c) => { setEditing(c); setForm({ name: c.name, phone: c.phone, email: c.email || '', address: c.address || '' }); setShowModal(true) }
@@ -49,7 +40,9 @@ export default function Clients() {
                 toast.success('Cliente creado')
             }
             closeModal()
-            fetchClients()
+            invalidateCache('clients')
+            invalidateCache('dashboard')
+            refetch()
         } catch (err) {
             toast.error(err.response?.data?.detail || 'Error al guardar')
         } finally {
@@ -62,7 +55,10 @@ export default function Clients() {
         try {
             await deleteClient(id)
             toast.success('Cliente eliminado')
-            fetchClients()
+            invalidateCache('clients')
+            invalidateCache('dashboard')
+            invalidateCache('orders')
+            refetch()
         } catch {
             toast.error('Error al eliminar')
         }
@@ -96,9 +92,9 @@ export default function Clients() {
             </div>
 
             {/* Table */}
-            {loading ? (
+            {loading && !clients ? (
                 <div className="empty-state"><p>Cargando...</p></div>
-            ) : clients.length === 0 ? (
+            ) : (clients || []).length === 0 ? (
                 <div className="empty-state">
                     <User size={48} />
                     <h3>No hay clientes</h3>
@@ -118,7 +114,7 @@ export default function Clients() {
                             </tr>
                         </thead>
                         <tbody>
-                            {clients.map((c) => (
+                            {(clients || []).map((c) => (
                                 <tr key={c.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/pedidos?client_id=${c.id}&client_name=${encodeURIComponent(c.name)}`)}>
                                     <td>
                                         <span style={{ fontWeight: 600, color: 'var(--primary)', cursor: 'pointer' }}>{c.name}</span>

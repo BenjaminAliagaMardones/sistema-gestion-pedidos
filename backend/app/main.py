@@ -33,13 +33,20 @@ app = FastAPI(
 )
 
 # CORS - Allow frontend
+_frontend_url = os.getenv("FRONTEND_URL", "")
+_origins = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+]
+# Add production frontend URL (Render provides hostname, may need https://)
+if _frontend_url:
+    if not _frontend_url.startswith("http"):
+        _origins.append(f"https://{_frontend_url}")
+    _origins.append(_frontend_url)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:3000",
-        os.getenv("FRONTEND_URL", "https://your-frontend.onrender.com"),
-    ],
+    allow_origins=_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

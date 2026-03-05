@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import func, extract
+from sqlalchemy import func as sqlfunc, extract, case
 from datetime import datetime
-from typing import List
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.user import User
@@ -17,24 +16,35 @@ def get_metrics(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """KPIs principales del dashboard."""
-    orders = db.query(Order).filter(Order.user_id == current_user.id).all()
-    active_orders = [o for o in orders if o.status.value not in ["Cancelado"]]
-
-    total_revenue = sum(o.total_usd for o in active_orders if o.total_usd)
-    total_profit = sum(o.total_profit_usd for o in active_orders if o.total_profit_usd)
-    total_orders = len(active_orders)
-    avg_ticket = (total_revenue / total_orders) if total_orders > 0 else 0
-    total_clients = db.query(Client).filter(Client.user_id == current_user.id).count()
-
-    # Pedidos del mes actual
+    """KPIs principales — single SQL query with conditional aggregation."""
     now = datetime.utcnow()
-    monthly_orders = [
-        o for o in active_orders
-        if o.order_date and o.order_date.year == now.year and o.order_date.month == now.month
-    ]
-    monthly_revenue = sum(o.total_usd for o in monthly_orders if o.total_usd)
-    monthly_profit = sum(o.total_profit_usd for o in monthly_orders if o.total_profit_usd)
+
+    # All-time metrics in a single query
+    all_time = db.query(
+        sqlfunc.coalesce(sqlfunc.sum(Order.total_usd), 0).label("revenue"),
+        sqlfunc.coalesce(sqlfunc.sum(Order.total_profit_usd), 0).label("profit"),
+        sqlfunc.count(Order.id).label("total_orders"),
+    ).filter(Order.user_id == current_user.id).first()
+
+    total_revenue = float(all_time.revenue)
+    total_profit = float(all_time.profit)
+    total_orders = all_time.total_orders
+    avg_ticket = (total_revenue / total_orders) if total_orders > 0 else 0
+
+    # Monthly metrics in a single query
+    monthly = db.query(
+        sqlfunc.coalesce(sqlfunc.sum(Order.total_usd), 0).label("revenue"),
+        sqlfunc.coalesce(sqlfunc.sum(Order.total_profit_usd), 0).label("profit"),
+        sqlfunc.count(Order.id).label("total_orders"),
+    ).filter(
+        Order.user_id == current_user.id,
+        extract("year", Order.order_date) == now.year,
+        extract("month", Order.order_date) == now.month,
+    ).first()
+
+    total_clients = db.query(sqlfunc.count(Client.id)).filter(
+        Client.user_id == current_user.id
+    ).scalar()
 
     return {
         "total_revenue_usd": round(total_revenue, 2),
@@ -42,9 +52,9 @@ def get_metrics(
         "total_orders": total_orders,
         "avg_ticket_usd": round(avg_ticket, 2),
         "total_clients": total_clients,
-        "monthly_revenue_usd": round(monthly_revenue, 2),
-        "monthly_profit_usd": round(monthly_profit, 2),
-        "monthly_orders": len(monthly_orders),
+        "monthly_revenue_usd": round(float(monthly.revenue), 2),
+        "monthly_profit_usd": round(float(monthly.profit), 2),
+        "monthly_orders": monthly.total_orders,
     }
 
 
@@ -54,37 +64,35 @@ def get_monthly_data(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Datos mensuales para gráficos (12 meses del año seleccionado)."""
+    """Datos mensuales — single query with GROUP BY month."""
     if year is None:
         year = datetime.utcnow().year
 
-    orders = db.query(Order).filter(
-        Order.user_id == current_user.id,
-        Order.status != "Cancelado",
-    ).all()
+    results = (
+        db.query(
+            extract("month", Order.order_date).label("month"),
+            sqlfunc.coalesce(sqlfunc.sum(Order.total_usd), 0).label("revenue"),
+            sqlfunc.coalesce(sqlfunc.sum(Order.total_profit_usd), 0).label("profit"),
+            sqlfunc.count(Order.id).label("orders"),
+        )
+        .filter(
+            Order.user_id == current_user.id,
+            extract("year", Order.order_date) == year,
+        )
+        .group_by(extract("month", Order.order_date))
+        .all()
+    )
 
-    monthly = {}
     months_es = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
-    for m in range(1, 13):
-        monthly[m] = {"month": months_es[m-1], "revenue": 0.0, "profit": 0.0, "orders": 0}
+    monthly = {m: {"month": months_es[m - 1], "revenue": 0.0, "profit": 0.0, "orders": 0} for m in range(1, 13)}
 
-    for order in orders:
-        if order.order_date and order.order_date.year == year:
-            m = order.order_date.month
-            monthly[m]["revenue"] += order.total_usd or 0
-            monthly[m]["profit"] += order.total_profit_usd or 0
-            monthly[m]["orders"] += 1
+    for row in results:
+        m = int(row.month)
+        monthly[m]["revenue"] = round(float(row.revenue), 2)
+        monthly[m]["profit"] = round(float(row.profit), 2)
+        monthly[m]["orders"] = row.orders
 
-    result = []
-    for m in range(1, 13):
-        d = monthly[m]
-        result.append({
-            "month": d["month"],
-            "revenue": round(d["revenue"], 2),
-            "profit": round(d["profit"], 2),
-            "orders": d["orders"],
-        })
-    return result
+    return [monthly[m] for m in range(1, 13)]
 
 
 @router.get("/top-clients")
@@ -93,22 +101,30 @@ def get_top_clients(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Top clientes por gasto total."""
-    clients = db.query(Client).filter(Client.user_id == current_user.id).all()
-    result = []
-    for client in clients:
-        orders = db.query(Order).filter(
-            Order.client_id == client.id,
-            Order.status != "Cancelado",
-        ).all()
-        total_spent = sum(o.total_usd for o in orders if o.total_usd)
-        result.append({
-            "id": str(client.id),
-            "name": client.name,
-            "phone": client.phone,
-            "total_orders": len(orders),
-            "total_spent_usd": round(total_spent, 2),
-        })
+    """Top clientes — single JOIN + GROUP BY query."""
+    results = (
+        db.query(
+            Client.id,
+            Client.name,
+            Client.phone,
+            sqlfunc.count(Order.id).label("total_orders"),
+            sqlfunc.coalesce(sqlfunc.sum(Order.total_usd), 0).label("total_spent"),
+        )
+        .outerjoin(Order, Order.client_id == Client.id)
+        .filter(Client.user_id == current_user.id)
+        .group_by(Client.id)
+        .order_by(sqlfunc.coalesce(sqlfunc.sum(Order.total_usd), 0).desc())
+        .limit(limit)
+        .all()
+    )
 
-    result.sort(key=lambda x: x["total_spent_usd"], reverse=True)
-    return result[:limit]
+    return [
+        {
+            "id": str(row.id),
+            "name": row.name,
+            "phone": row.phone,
+            "total_orders": row.total_orders,
+            "total_spent_usd": round(float(row.total_spent), 2),
+        }
+        for row in results
+    ]

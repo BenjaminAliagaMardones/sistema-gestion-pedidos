@@ -23,16 +23,12 @@ GRAY_LINE = colors.HexColor("#E0D6CC")          # Subtle borders
 DARK_TEXT = colors.HexColor("#1A1A2E")          # Body text
 
 
-def format_clp(value: float) -> str:
-    return f"$ {int(value):,}".replace(",", ".")
-
-
 def format_usd(value: float) -> str:
     return f"USD {value:.2f}"
 
 
 def generate_invoice_pdf(order, client, items, business_config) -> bytes:
-    """Genera el PDF de la boleta con estilo Kebexpo."""
+    """Genera el PDF de la boleta con estilo Kebexpo (solo USD)."""
     buffer = io.BytesIO()
 
     doc = SimpleDocTemplate(
@@ -126,7 +122,7 @@ def generate_invoice_pdf(order, client, items, business_config) -> bytes:
     left_content = [
         [logo_cell if logo_cell else Spacer(1, 0.1 * cm)],
         [Paragraph(business_name, title_style)],
-        [Paragraph("Importaciones & Envíos USA → Chile", subtitle_style)],
+        [Paragraph("Importaciones &amp; Envíos USA → Chile", subtitle_style)],
     ]
 
     right_content = [
@@ -134,8 +130,13 @@ def generate_invoice_pdf(order, client, items, business_config) -> bytes:
         [Spacer(1, 0.2 * cm)],
         [Paragraph(f"Fecha: {order.order_date.strftime('%d/%m/%Y') if order.order_date else datetime.now().strftime('%d/%m/%Y')}", header_right_sub)],
         [Paragraph(f"N° Pedido: {str(order.id)[:8].upper()}", header_right_sub)],
-        [Paragraph(f"Estado: {order.status.value}", header_right_sub)],
+        [Paragraph(f"Pago: {order.payment_status.value}", header_right_sub)],
+        [Paragraph(f"Estado: {order.order_status.value}", header_right_sub)],
     ]
+    if order.tracking_number:
+        right_content.append([Paragraph(f"Tracking: {order.tracking_number}", header_right_sub)])
+    if order.shipping_cost_usd and order.shipping_cost_usd > 0:
+        right_content.append([Paragraph(f"Envío: ${order.shipping_cost_usd:.2f} USD", header_right_sub)])
 
     header_table = Table(
         [[
@@ -179,7 +180,7 @@ def generate_invoice_pdf(order, client, items, business_config) -> bytes:
         [Paragraph("Teléfono:", bold_style), Paragraph(client.phone, info_style),
          Paragraph("Método de Pago:", bold_style), Paragraph(order.payment_method or "—", info_style)],
         [Paragraph("Email:", bold_style), Paragraph(client.email or "—", info_style),
-         Paragraph("Tasa USD→CLP:", bold_style), Paragraph(f"{order.exchange_rate:,.0f}", info_style)],
+         Paragraph("Moneda:", bold_style), Paragraph("USD (Dólar)", info_style)],
         [Paragraph("Dirección:", bold_style), Paragraph(client.address or "—", info_style),
          Paragraph("", info_style), Paragraph("", info_style)],
     ]
@@ -211,16 +212,16 @@ def generate_invoice_pdf(order, client, items, business_config) -> bytes:
     elements.append(product_header)
 
     col_header_style = ParagraphStyle(
-        "ColHeader", fontName="Helvetica-Bold", fontSize=7.5, textColor=PURPLE_DARK, alignment=TA_CENTER
+        "ColHeader", fontName="Helvetica-Bold", fontSize=7, textColor=PURPLE_DARK, alignment=TA_CENTER
     )
     cell_right = ParagraphStyle(
-        "CellRight", fontName="Helvetica", fontSize=8, textColor=DARK_TEXT, alignment=TA_RIGHT
+        "CellRight", fontName="Helvetica", fontSize=7.5, textColor=DARK_TEXT, alignment=TA_RIGHT
     )
     cell_center = ParagraphStyle(
-        "CellCenter", fontName="Helvetica", fontSize=8, textColor=DARK_TEXT, alignment=TA_CENTER
+        "CellCenter", fontName="Helvetica", fontSize=7.5, textColor=DARK_TEXT, alignment=TA_CENTER
     )
     cell_left = ParagraphStyle(
-        "CellLeft", fontName="Helvetica", fontSize=8, textColor=DARK_TEXT, alignment=TA_LEFT
+        "CellLeft", fontName="Helvetica", fontSize=7.5, textColor=DARK_TEXT, alignment=TA_LEFT
     )
 
     prod_headers = [
@@ -228,11 +229,10 @@ def generate_invoice_pdf(order, client, items, business_config) -> bytes:
         Paragraph("PRECIO BASE", col_header_style),
         Paragraph("TAX %", col_header_style),
         Paragraph("TAX USD", col_header_style),
-        Paragraph("COMIS. %", col_header_style),
-        Paragraph("COMIS. USD", col_header_style),
+        Paragraph("COM. %", col_header_style),
+        Paragraph("COM. USD", col_header_style),
         Paragraph("CANT.", col_header_style),
         Paragraph("TOTAL USD", col_header_style),
-        Paragraph("TOTAL CLP", col_header_style),
     ]
 
     prod_data = [prod_headers]
@@ -246,21 +246,21 @@ def generate_invoice_pdf(order, client, items, business_config) -> bytes:
             Paragraph(format_usd(item.commission_amount_usd), cell_right),
             Paragraph(str(item.quantity), cell_center),
             Paragraph(format_usd(item.final_price_usd), cell_right),
-            Paragraph(format_clp(item.final_price_clp), cell_right),
         ])
 
+    # Column widths must sum to 18cm (A4 width minus margins)
+    # 3.8 + 2.2 + 1.3 + 2.0 + 1.3 + 2.0 + 1.2 + 4.2 = 18.0cm
     prod_table = Table(
         prod_data,
-        colWidths=[4.5 * cm, 2.3 * cm, 1.5 * cm, 2 * cm, 1.7 * cm, 2 * cm, 1.3 * cm, 2.2 * cm, 2.5 * cm],
+        colWidths=[3.8 * cm, 2.2 * cm, 1.3 * cm, 2.0 * cm, 1.3 * cm, 2.0 * cm, 1.2 * cm, 4.2 * cm],
         repeatRows=1
     )
     prod_table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), CREAM_DARK),
         ("ROWBACKGROUNDS", (0, 1), (-1, -1), [WHITE, CREAM]),
         ("GRID", (0, 0), (-1, -1), 0.5, GRAY_LINE),
-        ("PADDING", (0, 0), (-1, -1), 5),
+        ("PADDING", (0, 0), (-1, -1), 4),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("FONTSIZE", (0, 0), (-1, -1), 8),
         ("LINEBELOW", (0, 0), (-1, 0), 1, CORAL),
     ]))
     elements.append(prod_table)
@@ -272,12 +272,6 @@ def generate_invoice_pdf(order, client, items, business_config) -> bytes:
     )
     total_value_style = ParagraphStyle(
         "TotalValue", fontName="Helvetica-Bold", fontSize=10, textColor=DARK_TEXT, alignment=TA_RIGHT
-    )
-    grand_label_style = ParagraphStyle(
-        "GrandLabel", fontName="Helvetica-Bold", fontSize=11, textColor=PURPLE_DARK, alignment=TA_RIGHT
-    )
-    grand_value_style = ParagraphStyle(
-        "GrandValue", fontName="Helvetica-Bold", fontSize=11, textColor=PURPLE_DARK, alignment=TA_RIGHT
     )
     final_label_style = ParagraphStyle(
         "FinalLabel", fontName="Helvetica-Bold", fontSize=14, textColor=WHITE, alignment=TA_RIGHT
@@ -291,10 +285,8 @@ def generate_invoice_pdf(order, client, items, business_config) -> bytes:
          Paragraph(format_usd(order.total_tax_usd), total_value_style)],
         [Paragraph("Total Comisión USD:", total_label_style),
          Paragraph(format_usd(order.total_commission_usd), total_value_style)],
-        [Paragraph("TOTAL USD:", grand_label_style),
-         Paragraph(format_usd(order.total_usd), grand_value_style)],
-        [Paragraph("TOTAL CLP:", final_label_style),
-         Paragraph(format_clp(order.total_clp), final_value_style)],
+        [Paragraph("TOTAL USD:", final_label_style),
+         Paragraph(format_usd(order.total_usd), final_value_style)],
     ]
 
     totals_table = Table(totals_data, colWidths=[12 * cm, 6 * cm])
@@ -302,12 +294,10 @@ def generate_invoice_pdf(order, client, items, business_config) -> bytes:
         ("ALIGN", (0, 0), (-1, -1), "RIGHT"),
         ("PADDING", (0, 0), (-1, -1), 7),
         ("ROWBACKGROUNDS", (0, 0), (-1, 1), [CREAM, WHITE]),
-        ("BACKGROUND", (0, 2), (-1, 2), CREAM_DARK),
-        ("BACKGROUND", (0, 3), (-1, 3), PURPLE_DARK),
+        ("BACKGROUND", (0, 2), (-1, 2), PURPLE_DARK),
         ("LINEABOVE", (0, 2), (-1, 2), 1.5, CORAL),
-        ("LINEABOVE", (0, 3), (-1, 3), 1, PURPLE_MID),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("GRID", (0, 0), (-1, 2), 0.5, GRAY_LINE),
+        ("GRID", (0, 0), (-1, 1), 0.5, GRAY_LINE),
     ]))
     elements.append(totals_table)
 

@@ -43,7 +43,7 @@ export default function Login() {
                         <input
                             type="text"
                             className="form-input"
-                            placeholder="admin"
+                            placeholder="Tu usuario"
                             value={username}
                             onChange={(e) => setUsername(e.target.value)}
                             autoComplete="username"

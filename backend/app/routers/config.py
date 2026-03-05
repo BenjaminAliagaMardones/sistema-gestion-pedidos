@@ -58,12 +58,18 @@ async def upload_logo(
     if file.content_type not in ["image/jpeg", "image/png", "image/webp"]:
         raise HTTPException(status_code=400, detail="Solo se permiten imágenes JPG, PNG o WebP")
 
+    # Validate file size (max 5MB)
+    MAX_SIZE = 5 * 1024 * 1024  # 5MB
+    contents = await file.read()
+    if len(contents) > MAX_SIZE:
+        raise HTTPException(status_code=400, detail="El archivo no puede superar 5MB")
+
     ext = file.filename.split(".")[-1] if "." in file.filename else "png"
     filename = f"logo_{current_user.id}.{ext}"
     filepath = os.path.join(LOGO_DIR, filename)
 
     with open(filepath, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+        buffer.write(contents)
 
     config = _get_or_create_config(db, current_user.id)
     config.logo_path = filepath

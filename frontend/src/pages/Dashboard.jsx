@@ -1,43 +1,24 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import {
     AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
     Tooltip, ResponsiveContainer, Legend
 } from 'recharts'
 import { getDashboardMetrics, getMonthlyData, getTopClients } from '../services/api'
+import { useCachedQuery } from '../hooks/useCache'
 import {
-    DollarSign, TrendingUp, ShoppingBag, Users, Award, Calendar, Activity
+    DollarSign, TrendingUp, ShoppingBag, Users, Award, Calendar
 } from 'lucide-react'
 
 const formatUSD = (v) => `$${Number(v).toFixed(2)}`
-const formatCLP = (v) => `$ ${Math.floor(v).toLocaleString('es-CL')}`
 
 export default function Dashboard() {
-    const [metrics, setMetrics] = useState(null)
-    const [monthly, setMonthly] = useState([])
-    const [topClients, setTopClients] = useState([])
-    const [loading, setLoading] = useState(true)
-    const [dollarRate, setDollarRate] = useState(null)
     const year = new Date().getFullYear()
 
-    useEffect(() => {
-        Promise.all([
-            getDashboardMetrics(),
-            getMonthlyData(year),
-            getTopClients(),
-        ]).then(([m, mo, tc]) => {
-            setMetrics(m.data)
-            setMonthly(mo.data)
-            setTopClients(tc.data)
-        }).finally(() => setLoading(false))
+    const { data: metrics, loading: l1 } = useCachedQuery('dashboard-metrics', getDashboardMetrics)
+    const { data: monthly, loading: l2 } = useCachedQuery(`dashboard-monthly-${year}`, () => getMonthlyData(year))
+    const { data: topClients, loading: l3 } = useCachedQuery('dashboard-top-clients', getTopClients)
 
-        // Fetch live dollar rate
-        fetch('https://mindicador.cl/api/dolar')
-            .then(r => r.json())
-            .then(data => {
-                if (data?.serie?.length > 0) setDollarRate(data.serie[0].valor)
-            })
-            .catch(() => { })
-    }, [])
+    const loading = (l1 || l2 || l3) && !metrics
 
     if (loading) return (
         <div className="empty-state">
@@ -46,7 +27,6 @@ export default function Dashboard() {
     )
 
     const kpis = [
-        { label: 'Dólar Hoy', value: dollarRate ? `$${dollarRate.toLocaleString('es-CL', { minimumFractionDigits: 2 })}` : '...', sub: 'CLP / En vivo', icon: Activity, color: '#10B981', live: true },
         { label: 'Facturación Total', value: formatUSD(metrics?.total_revenue_usd || 0), sub: 'Total histórico', icon: DollarSign, color: '#6C63FF' },
         { label: 'Ganancias Totales', value: formatUSD(metrics?.total_profit_usd || 0), sub: 'Total histórico', icon: TrendingUp, color: '#10B981' },
         { label: 'Total Pedidos', value: metrics?.total_orders || 0, sub: 'Pedidos activos', icon: ShoppingBag, color: '#F59E0B' },
@@ -79,18 +59,6 @@ export default function Dashboard() {
                             <div className="kpi-icon"><Icon size={40} /></div>
                             <div className="kpi-label">
                                 {kpi.label}
-                                {kpi.live && (
-                                    <span style={{
-                                        display: 'inline-flex', alignItems: 'center', gap: '4px',
-                                        marginLeft: '6px', padding: '1px 6px', borderRadius: '99px',
-                                        background: 'rgba(16,185,129,0.15)', color: '#10B981',
-                                        fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase',
-                                        verticalAlign: 'middle'
-                                    }}>
-                                        <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#10B981', animation: 'ratePulse 2s ease-in-out infinite' }}></span>
-                                        Live
-                                    </span>
-                                )}
                             </div>
                             <div className="kpi-value">{kpi.value}</div>
                             <div className="kpi-sub">{kpi.sub}</div>
@@ -106,7 +74,7 @@ export default function Dashboard() {
                         <span className="chart-title">📈 Ventas Mensuales (USD)</span>
                     </div>
                     <ResponsiveContainer width="100%" height={200}>
-                        <AreaChart data={monthly}>
+                        <AreaChart data={monthly || []}>
                             <defs>
                                 <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
                                     <stop offset="5%" stopColor="#6C63FF" stopOpacity={0.3} />
@@ -127,7 +95,7 @@ export default function Dashboard() {
                         <span className="chart-title">💰 Ganancias Mensuales (USD)</span>
                     </div>
                     <ResponsiveContainer width="100%" height={200}>
-                        <BarChart data={monthly}>
+                        <BarChart data={monthly || []}>
                             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                             <XAxis dataKey="month" tick={{ fill: '#9898BB', fontSize: 11 }} axisLine={false} tickLine={false} />
                             <YAxis tick={{ fill: '#9898BB', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} />
@@ -143,7 +111,7 @@ export default function Dashboard() {
                 <h3 style={{ marginBottom: '1rem', fontSize: '0.95rem', color: 'var(--text-secondary)' }}>
                     🏆 Top Clientes
                 </h3>
-                {topClients.length === 0 ? (
+                {(topClients || []).length === 0 ? (
                     <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Sin datos aún</p>
                 ) : (
                     <div className="table-container" style={{ border: 'none' }}>
@@ -158,7 +126,7 @@ export default function Dashboard() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {topClients.map((c, i) => (
+                                {(topClients || []).map((c, i) => (
                                     <tr key={c.id}>
                                         <td>
                                             <span style={{

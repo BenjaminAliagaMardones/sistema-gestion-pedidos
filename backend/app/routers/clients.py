@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import func as sqlfunc
 from typing import List, Optional
 from uuid import UUID
 from app.database import get_db
@@ -14,35 +15,44 @@ router = APIRouter(prefix="/api/clients", tags=["Clientes"])
 
 @router.get("/", response_model=List[ClientResponse])
 def list_clients(
-    search: Optional[str] = Query(None, description="Buscar por nombre, teléfono o email"),
+    search: Optional[str] = Query(None, description="Buscar por nombre, telefono o email"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    query = db.query(Client).filter(Client.user_id == current_user.id)
+    # Single query with LEFT JOIN + GROUP BY instead of N+1
+    query = (
+        db.query(
+            Client,
+            sqlfunc.count(Order.id).label("total_orders"),
+            sqlfunc.coalesce(sqlfunc.sum(Order.total_usd), 0).label("total_spent"),
+        )
+        .outerjoin(Order, Order.client_id == Client.id)
+        .filter(Client.user_id == current_user.id)
+    )
+
     if search:
         search_term = f"%{search}%"
         query = query.filter(
-            (Client.name.ilike(search_term)) |
-            (Client.phone.ilike(search_term)) |
-            (Client.email.ilike(search_term))
+            (Client.name.ilike(search_term))
+            | (Client.phone.ilike(search_term))
+            | (Client.email.ilike(search_term))
         )
-    clients = query.order_by(Client.created_at.desc()).all()
 
-    result = []
-    for client in clients:
-        orders = db.query(Order).filter(Order.client_id == client.id).all()
-        total_spent = sum(o.total_usd for o in orders if o.total_usd)
-        result.append(ClientResponse(
+    results = query.group_by(Client.id).order_by(Client.created_at.desc()).all()
+
+    return [
+        ClientResponse(
             id=client.id,
             name=client.name,
             phone=client.phone,
             email=client.email,
             address=client.address,
             created_at=client.created_at,
-            total_orders=len(orders),
-            total_spent_usd=round(total_spent, 2),
-        ))
-    return result
+            total_orders=total_orders,
+            total_spent_usd=round(float(total_spent), 2),
+        )
+        for client, total_orders, total_spent in results
+    ]
 
 
 @router.post("/", response_model=ClientResponse, status_code=status.HTTP_201_CREATED)
@@ -62,9 +72,14 @@ def create_client(
     db.commit()
     db.refresh(client)
     return ClientResponse(
-        id=client.id, name=client.name, phone=client.phone,
-        email=client.email, address=client.address, created_at=client.created_at,
-        total_orders=0, total_spent_usd=0.0,
+        id=client.id,
+        name=client.name,
+        phone=client.phone,
+        email=client.email,
+        address=client.address,
+        created_at=client.created_at,
+        total_orders=0,
+        total_spent_usd=0.0,
     )
 
 
@@ -74,15 +89,30 @@ def get_client(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    client = db.query(Client).filter(Client.id == client_id, Client.user_id == current_user.id).first()
-    if not client:
+    result = (
+        db.query(
+            Client,
+            sqlfunc.count(Order.id).label("total_orders"),
+            sqlfunc.coalesce(sqlfunc.sum(Order.total_usd), 0).label("total_spent"),
+        )
+        .outerjoin(Order, Order.client_id == Client.id)
+        .filter(Client.id == client_id, Client.user_id == current_user.id)
+        .group_by(Client.id)
+        .first()
+    )
+    if not result:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
-    orders = db.query(Order).filter(Order.client_id == client.id).all()
-    total_spent = sum(o.total_usd for o in orders if o.total_usd)
+
+    client, total_orders, total_spent = result
     return ClientResponse(
-        id=client.id, name=client.name, phone=client.phone,
-        email=client.email, address=client.address, created_at=client.created_at,
-        total_orders=len(orders), total_spent_usd=round(total_spent, 2),
+        id=client.id,
+        name=client.name,
+        phone=client.phone,
+        email=client.email,
+        address=client.address,
+        created_at=client.created_at,
+        total_orders=total_orders,
+        total_spent_usd=round(float(total_spent), 2),
     )
 
 
@@ -93,19 +123,38 @@ def update_client(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    client = db.query(Client).filter(Client.id == client_id, Client.user_id == current_user.id).first()
+    client = (
+        db.query(Client)
+        .filter(Client.id == client_id, Client.user_id == current_user.id)
+        .first()
+    )
     if not client:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
+
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(client, field, value)
     db.commit()
     db.refresh(client)
-    orders = db.query(Order).filter(Order.client_id == client.id).all()
-    total_spent = sum(o.total_usd for o in orders if o.total_usd)
+
+    # Get aggregated order data in single query
+    agg = (
+        db.query(
+            sqlfunc.count(Order.id).label("total_orders"),
+            sqlfunc.coalesce(sqlfunc.sum(Order.total_usd), 0).label("total_spent"),
+        )
+        .filter(Order.client_id == client.id)
+        .first()
+    )
+
     return ClientResponse(
-        id=client.id, name=client.name, phone=client.phone,
-        email=client.email, address=client.address, created_at=client.created_at,
-        total_orders=len(orders), total_spent_usd=round(total_spent, 2),
+        id=client.id,
+        name=client.name,
+        phone=client.phone,
+        email=client.email,
+        address=client.address,
+        created_at=client.created_at,
+        total_orders=agg.total_orders if agg else 0,
+        total_spent_usd=round(float(agg.total_spent), 2) if agg else 0.0,
     )
 
 
@@ -115,7 +164,11 @@ def delete_client(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    client = db.query(Client).filter(Client.id == client_id, Client.user_id == current_user.id).first()
+    client = (
+        db.query(Client)
+        .filter(Client.id == client_id, Client.user_id == current_user.id)
+        .first()
+    )
     if not client:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
     db.delete(client)

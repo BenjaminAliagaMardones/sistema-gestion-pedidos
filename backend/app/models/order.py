@@ -7,12 +7,14 @@ from app.database import Base
 import enum
 
 
-class OrderStatus(str, enum.Enum):
+class PaymentStatus(str, enum.Enum):
     pendiente = "Pendiente"
-    comprado = "Comprado"
+    pagado = "Pagado"
+
+
+class OrderStatus(str, enum.Enum):
+    en_bodega = "En Bodega"
     enviado = "Enviado"
-    entregado = "Entregado"
-    cancelado = "Cancelado"
 
 
 class Order(Base):
@@ -21,11 +23,14 @@ class Order(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     client_id = Column(UUID(as_uuid=True), ForeignKey("clients.id"), nullable=False)
-    status = Column(SAEnum(OrderStatus), default=OrderStatus.pendiente, nullable=False)
+    payment_status = Column(SAEnum(PaymentStatus), default=PaymentStatus.pendiente, nullable=False)
+    order_status = Column(SAEnum(OrderStatus), default=OrderStatus.en_bodega, nullable=False)
+    tracking_number = Column(String(100), nullable=True)
+    shipping_cost_usd = Column(Float, default=0.0)
     payment_bank = Column(String(100), nullable=True)
     payment_method = Column(String(100), nullable=True)
     notes = Column(Text, nullable=True)
-    exchange_rate = Column(Float, nullable=False, default=900.0)
+
     order_date = Column(DateTime(timezone=True), server_default=func.now())
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -34,7 +39,7 @@ class Order(Base):
     total_commission_usd = Column(Float, default=0.0)
     total_profit_usd = Column(Float, default=0.0)
     total_usd = Column(Float, default=0.0)
-    total_clp = Column(Float, default=0.0)
+
 
     client = relationship("Client", back_populates="orders")
     items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
@@ -55,7 +60,7 @@ class OrderItem(Base):
     tax_amount_usd = Column(Float, default=0.0)
     commission_amount_usd = Column(Float, default=0.0)
     final_price_usd = Column(Float, default=0.0)
-    final_price_clp = Column(Float, default=0.0)
+
     profit_usd = Column(Float, default=0.0)
 
     order = relationship("Order", back_populates="items")

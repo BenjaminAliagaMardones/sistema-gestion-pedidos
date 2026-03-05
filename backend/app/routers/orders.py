@@ -22,20 +22,41 @@ def _build_order_response(order: Order) -> OrderResponse:
     return OrderResponse.model_validate(order)
 
 
-@router.get("/", response_model=List[OrderResponse])
+@router.get("/")
 def list_orders(
     client_id: Optional[UUID] = None,
-    status_filter: Optional[str] = None,
+    payment_status_filter: Optional[str] = None,
+    order_status_filter: Optional[str] = None,
+    search: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 50,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     query = db.query(Order).filter(Order.user_id == current_user.id)
     if client_id:
         query = query.filter(Order.client_id == client_id)
-    if status_filter:
-        query = query.filter(Order.status == status_filter)
-    orders = query.order_by(Order.created_at.desc()).all()
-    return [OrderResponse.model_validate(o) for o in orders]
+    if payment_status_filter:
+        query = query.filter(Order.payment_status == payment_status_filter)
+    if order_status_filter:
+        query = query.filter(Order.order_status == order_status_filter)
+    if search:
+        search_term = f"%{search}%"
+        query = query.join(Client, Order.client_id == Client.id).filter(
+            Client.name.ilike(search_term)
+        )
+
+    total = query.count()
+    offset = (page - 1) * page_size
+    orders = query.order_by(Order.created_at.desc()).offset(offset).limit(page_size).all()
+
+    return {
+        "items": [OrderResponse.model_validate(o) for o in orders],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "pages": (total + page_size - 1) // page_size,
+    }
 
 
 @router.post("/", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
@@ -49,17 +70,19 @@ def create_order(
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
 
     # Calcular items
-    items_data = [calculate_item(item, data.exchange_rate) for item in data.items]
+    items_data = [calculate_item(item) for item in data.items]
     totals = calculate_order_totals(items_data)
 
     order = Order(
         user_id=current_user.id,
         client_id=data.client_id,
-        status=data.status,
+        payment_status=data.payment_status,
+        order_status=data.order_status,
+        tracking_number=data.tracking_number,
+        shipping_cost_usd=data.shipping_cost_usd,
         payment_bank=data.payment_bank,
         payment_method=data.payment_method,
         notes=data.notes,
-        exchange_rate=data.exchange_rate,
         order_date=data.order_date or datetime.utcnow(),
         **totals,
     )
@@ -99,22 +122,19 @@ def update_order(
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
 
     # Update basic fields
-    for field in ["status", "payment_bank", "payment_method", "notes", "order_date"]:
+    for field in ["payment_status", "order_status", "tracking_number", "shipping_cost_usd", "payment_bank", "payment_method", "notes", "order_date"]:
         value = getattr(data, field, None)
         if value is not None:
             setattr(order, field, value)
-
-    exchange_rate = data.exchange_rate if data.exchange_rate is not None else order.exchange_rate
 
     # If items provided, recalculate
     if data.items is not None:
         # Delete existing items
         db.query(OrderItem).filter(OrderItem.order_id == order.id).delete()
-        items_data = [calculate_item(item, exchange_rate) for item in data.items]
+        items_data = [calculate_item(item) for item in data.items]
         totals = calculate_order_totals(items_data)
         for key, val in totals.items():
             setattr(order, key, val)
-        order.exchange_rate = exchange_rate
         for item_data in items_data:
             order_item = OrderItem(order_id=order.id, **item_data)
             db.add(order_item)
