@@ -33,8 +33,6 @@ class OrderCreate(BaseModel):
     client_id: UUID
     payment_status: PaymentStatus = PaymentStatus.pendiente
     order_status: OrderStatus = OrderStatus.en_bodega
-    tracking_number: Optional[str] = None
-    shipping_cost_usd: float = 0.0
     payment_bank: Optional[str] = None
     payment_method: Optional[str] = None
     notes: Optional[str] = None
@@ -45,8 +43,6 @@ class OrderCreate(BaseModel):
 class OrderUpdate(BaseModel):
     payment_status: Optional[PaymentStatus] = None
     order_status: Optional[OrderStatus] = None
-    tracking_number: Optional[str] = None
-    shipping_cost_usd: Optional[float] = None
     payment_bank: Optional[str] = None
     payment_method: Optional[str] = None
     notes: Optional[str] = None
@@ -65,12 +61,11 @@ class ClientOrderInfo(BaseModel):
 
 class OrderResponse(BaseModel):
     id: UUID
+    invoice_number: Optional[int]
     client_id: UUID
     client: Optional[ClientOrderInfo]
     payment_status: PaymentStatus
     order_status: OrderStatus
-    tracking_number: Optional[str]
-    shipping_cost_usd: float
     payment_bank: Optional[str]
     payment_method: Optional[str]
     notes: Optional[str]

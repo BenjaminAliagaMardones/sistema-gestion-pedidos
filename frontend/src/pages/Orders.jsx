@@ -2,12 +2,12 @@ import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { getOrders, getClients, createOrder, updateOrder, deleteOrder, getOrderPdfUrl } from '../services/api'
 import { useCachedQuery, invalidateCache } from '../hooks/useCache'
-import { Plus, X, Trash2, FileDown, Edit2, ShoppingBag, ArrowLeft, Users, CreditCard, Package, Search, ChevronLeft, ChevronRight, Truck } from 'lucide-react'
+import { Plus, X, Trash2, FileDown, Edit2, ShoppingBag, ArrowLeft, Users, CreditCard, Package, Search, ChevronLeft, ChevronRight } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const PAYMENT_STATUS_OPTIONS = ['Pendiente', 'Pagado']
 const ORDER_STATUS_OPTIONS = ['En Bodega', 'Enviado']
-const BANKS = ['Banco Estado', 'Santander', 'BCI', 'Falabella', 'Ripley', 'Scotiabank', 'Otro']
+const BANKS = ['Global 66', 'Cobro Simple', 'Otros']
 const METHODS = ['Transferencia', 'Tarjeta débito', 'Tarjeta crédito', 'Efectivo', 'Otro']
 
 const emptyItem = { name: '', base_price_usd: '', tax_percent: '', commission_percent: '', quantity: 1 }
@@ -39,8 +39,6 @@ const emptyOrder = {
     client_id: '',
     payment_status: 'Pendiente',
     order_status: 'En Bodega',
-    tracking_number: '',
-    shipping_cost_usd: '',
     payment_bank: '',
     payment_method: '',
     notes: '',
@@ -54,6 +52,10 @@ function getPaymentBadgeClass(status) {
 
 function getOrderBadgeClass(status) {
     return status === 'Enviado' ? 'badge-enviado' : 'badge-en-bodega'
+}
+
+function formatInvoice(num) {
+    return num ? `#${String(num).padStart(4, '0')}` : '—'
 }
 
 export default function Orders() {
@@ -72,7 +74,6 @@ export default function Orders() {
     const [page, setPage] = useState(1)
     const PAGE_SIZE = 30
 
-    // Build cache key that includes page and filters
     const cacheKey = `orders-p${page}-${filterClientId || 'all'}-${searchText}`
     const { data: ordersData, loading, refetch: refetchOrders } = useCachedQuery(
         cacheKey,
@@ -91,7 +92,6 @@ export default function Orders() {
     const totalOrders = ordersData?.total || ordersList.length
     const totalPages = ordersData?.pages || 1
 
-    // Reset page when changing filters
     useEffect(() => { setPage(1) }, [filterClientId, searchText])
 
     const openCreate = () => {
@@ -106,8 +106,6 @@ export default function Orders() {
             client_id: order.client_id,
             payment_status: order.payment_status,
             order_status: order.order_status,
-            tracking_number: order.tracking_number || '',
-            shipping_cost_usd: order.shipping_cost_usd ? String(order.shipping_cost_usd) : '',
             payment_bank: order.payment_bank || '',
             payment_method: order.payment_method || '',
             notes: order.notes || '',
@@ -147,8 +145,6 @@ export default function Orders() {
         try {
             const payload = {
                 ...form,
-                shipping_cost_usd: parseFloat(form.shipping_cost_usd) || 0,
-                tracking_number: form.tracking_number || null,
                 order_date: form.order_date ? new Date(form.order_date).toISOString() : undefined,
                 items: form.items.map((i) => ({
                     name: i.name,
@@ -230,7 +226,6 @@ export default function Orders() {
             .catch(() => toast.error('Error al generar PDF'))
     }
 
-    // Apply client-side status filters on the already-paginated data
     const filteredOrders = ordersList.filter((o) => {
         const matchOrder = filterOrderStatus === 'Todos' || o.order_status === filterOrderStatus
         const matchPayment = filterPaymentStatus === 'Todos' || o.payment_status === filterPaymentStatus
@@ -338,13 +333,11 @@ export default function Orders() {
                         <table className="table">
                             <thead>
                                 <tr>
-                                    <th>ID</th>
+                                    <th>N° Boleta</th>
                                     <th>Cliente</th>
                                     <th>Fecha</th>
                                     <th>Pago</th>
                                     <th>Estado</th>
-                                    <th>Tracking</th>
-                                    <th>Envío</th>
                                     <th>Total USD</th>
                                     <th>Acciones</th>
                                 </tr>
@@ -352,8 +345,8 @@ export default function Orders() {
                             <tbody>
                                 {filteredOrders.map((o) => (
                                     <tr key={o.id}>
-                                        <td style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                            #{o.id.slice(0, 8).toUpperCase()}
+                                        <td style={{ fontFamily: 'monospace', fontSize: '0.85rem', fontWeight: 700, color: 'var(--primary)' }}>
+                                            {formatInvoice(o.invoice_number)}
                                         </td>
                                         <td style={{ fontWeight: 600 }}>{o.client?.name || '—'}</td>
                                         <td style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
@@ -374,18 +367,6 @@ export default function Orders() {
                                                 onChange={(e) => handleOrderStatusChange(o.id, e.target.value)}>
                                                 {ORDER_STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
                                             </select>
-                                        </td>
-                                        <td style={{ fontSize: '0.75rem', fontFamily: 'monospace' }}>
-                                            {o.tracking_number ? (
-                                                <span title={o.tracking_number} style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: 'var(--info)' }}>
-                                                    <Truck size={12} /> {o.tracking_number}
-                                                </span>
-                                            ) : (
-                                                <span style={{ color: 'var(--text-muted)' }}>—</span>
-                                            )}
-                                        </td>
-                                        <td style={{ fontSize: '0.8rem', color: o.shipping_cost_usd > 0 ? 'var(--warning)' : 'var(--text-muted)' }}>
-                                            {o.shipping_cost_usd > 0 ? `$${o.shipping_cost_usd.toFixed(2)}` : '—'}
                                         </td>
                                         <td style={{ color: 'var(--success)', fontWeight: 700 }}>${o.total_usd.toFixed(2)}</td>
                                         <td>
@@ -431,7 +412,7 @@ export default function Orders() {
                 <div className="modal-overlay" onClick={closeModal}>
                     <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
-                            <h3>{editingOrder ? 'Editar Pedido' : 'Nuevo Pedido'}</h3>
+                            <h3>{editingOrder ? `Editar Pedido ${formatInvoice(editingOrder.invoice_number)}` : 'Nuevo Pedido'}</h3>
                             <button className="modal-close" onClick={closeModal}><X size={20} /></button>
                         </div>
 
@@ -457,19 +438,9 @@ export default function Orders() {
                                     </select>
                                 </div>
                                 <div className="form-group">
-                                    <label className="form-label">N° Tracking</label>
-                                    <input className="form-input" placeholder="USPS/FedEx/UPS tracking" value={form.tracking_number}
-                                        onChange={(e) => setForm({ ...form, tracking_number: e.target.value })} />
-                                </div>
-                                <div className="form-group">
-                                    <label className="form-label">Costo Envío USD</label>
-                                    <input type="number" step="0.01" className="form-input" placeholder="0.00" value={form.shipping_cost_usd}
-                                        onChange={(e) => setForm({ ...form, shipping_cost_usd: e.target.value })} />
-                                </div>
-                                <div className="form-group">
-                                    <label className="form-label">Banco</label>
+                                    <label className="form-label">Plataforma de Pago</label>
                                     <select className="form-select" value={form.payment_bank} onChange={(e) => setForm({ ...form, payment_bank: e.target.value })}>
-                                        <option value="">Seleccionar banco</option>
+                                        <option value="">Seleccionar</option>
                                         {BANKS.map((b) => <option key={b} value={b}>{b}</option>)}
                                     </select>
                                 </div>
@@ -546,9 +517,6 @@ export default function Orders() {
                                 <h4 style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Resumen del Pedido</h4>
                                 <div className="total-row"><span>Total Tax USD</span><span>${totals.totalTax.toFixed(2)}</span></div>
                                 <div className="total-row"><span>Total Comisión USD</span><span style={{ color: 'var(--success)' }}>${totals.totalComm.toFixed(2)}</span></div>
-                                {form.shipping_cost_usd && parseFloat(form.shipping_cost_usd) > 0 && (
-                                    <div className="total-row"><span>Costo Envío USD</span><span style={{ color: 'var(--warning)' }}>${parseFloat(form.shipping_cost_usd).toFixed(2)}</span></div>
-                                )}
                                 <div className="total-row">
                                     <span>TOTAL USD</span>
                                     <span className="total-grand">${totals.totalUSD.toFixed(2)}</span>

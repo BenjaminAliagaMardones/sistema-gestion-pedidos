@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import func as sqlfunc
 from typing import List, Optional
 from uuid import UUID
 from datetime import datetime
@@ -73,13 +74,18 @@ def create_order(
     items_data = [calculate_item(item) for item in data.items]
     totals = calculate_order_totals(items_data)
 
+    # Generate correlative invoice number
+    max_invoice = db.query(sqlfunc.max(Order.invoice_number)).filter(
+        Order.user_id == current_user.id
+    ).scalar()
+    next_invoice = (max_invoice or 0) + 1
+
     order = Order(
         user_id=current_user.id,
         client_id=data.client_id,
+        invoice_number=next_invoice,
         payment_status=data.payment_status,
         order_status=data.order_status,
-        tracking_number=data.tracking_number,
-        shipping_cost_usd=data.shipping_cost_usd,
         payment_bank=data.payment_bank,
         payment_method=data.payment_method,
         notes=data.notes,
@@ -122,7 +128,7 @@ def update_order(
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
 
     # Update basic fields
-    for field in ["payment_status", "order_status", "tracking_number", "shipping_cost_usd", "payment_bank", "payment_method", "notes", "order_date"]:
+    for field in ["payment_status", "order_status", "payment_bank", "payment_method", "notes", "order_date"]:
         value = getattr(data, field, None)
         if value is not None:
             setattr(order, field, value)

@@ -125,18 +125,16 @@ def generate_invoice_pdf(order, client, items, business_config) -> bytes:
         [Paragraph("Importaciones &amp; Envíos USA → Chile", subtitle_style)],
     ]
 
+    invoice_num = str(order.invoice_number).zfill(4) if order.invoice_number else str(order.id)[:8].upper()
+
     right_content = [
         [Paragraph("BOLETA DE PEDIDO", header_right_style)],
         [Spacer(1, 0.2 * cm)],
+        [Paragraph(f"Boleta N° {invoice_num}", header_right_sub)],
         [Paragraph(f"Fecha: {order.order_date.strftime('%d/%m/%Y') if order.order_date else datetime.now().strftime('%d/%m/%Y')}", header_right_sub)],
-        [Paragraph(f"N° Pedido: {str(order.id)[:8].upper()}", header_right_sub)],
         [Paragraph(f"Pago: {order.payment_status.value}", header_right_sub)],
         [Paragraph(f"Estado: {order.order_status.value}", header_right_sub)],
     ]
-    if order.tracking_number:
-        right_content.append([Paragraph(f"Tracking: {order.tracking_number}", header_right_sub)])
-    if order.shipping_cost_usd and order.shipping_cost_usd > 0:
-        right_content.append([Paragraph(f"Envío: ${order.shipping_cost_usd:.2f} USD", header_right_sub)])
 
     header_table = Table(
         [[
