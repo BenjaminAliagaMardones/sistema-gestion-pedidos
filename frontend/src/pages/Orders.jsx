@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom'
 import { getOrders, getClients, createOrder, updateOrder, deleteOrder, getOrderPdfUrl } from '../services/api'
 import { useCachedQuery, invalidateCache } from '../hooks/useCache'
 import { Plus, X, Trash2, FileDown, Edit2, ShoppingBag, ArrowLeft, Users, CreditCard, Package, Search, ChevronLeft, ChevronRight } from 'lucide-react'
+import ClientSearchSelect from '../components/ClientSearchSelect'
 import toast from 'react-hot-toast'
 
 const PAYMENT_STATUS_OPTIONS = ['Pendiente', 'Pagado']
@@ -420,10 +421,11 @@ export default function Orders() {
                             <div className="form-grid mb-2">
                                 <div className="form-group">
                                     <label className="form-label">Cliente *</label>
-                                    <select className="form-select" value={form.client_id} onChange={(e) => setForm({ ...form, client_id: e.target.value })}>
-                                        <option value="">Selecciona un cliente</option>
-                                        {(clients || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                                    </select>
+                                    <ClientSearchSelect
+                                        clients={clients || []}
+                                        value={form.client_id}
+                                        onChange={(clientId) => setForm({ ...form, client_id: clientId })}
+                                    />
                                 </div>
                                 <div className="form-group">
                                     <label className="form-label">Estado de Pago</label>
