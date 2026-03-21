@@ -128,7 +128,7 @@ def update_order(
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
 
     # Update basic fields
-    for field in ["payment_status", "order_status", "payment_bank", "payment_method", "notes", "order_date"]:
+    for field in ["client_id", "payment_status", "order_status", "payment_bank", "payment_method", "notes", "order_date"]:
         value = getattr(data, field, None)
         if value is not None:
             setattr(order, field, value)

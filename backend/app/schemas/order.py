@@ -41,6 +41,7 @@ class OrderCreate(BaseModel):
 
 
 class OrderUpdate(BaseModel):
+    client_id: Optional[UUID] = None
     payment_status: Optional[PaymentStatus] = None
     order_status: Optional[OrderStatus] = None
     payment_bank: Optional[str] = None
