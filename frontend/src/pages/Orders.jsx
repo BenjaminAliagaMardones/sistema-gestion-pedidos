@@ -8,7 +8,7 @@ import toast from 'react-hot-toast'
 
 const PAYMENT_STATUS_OPTIONS = ['Pendiente', 'Pagado']
 const ORDER_STATUS_OPTIONS = ['En Bodega', 'Enviado']
-const BANKS = ['Global 66', 'Cobro Simple', 'Otros']
+const BANKS = ['Global 66', 'Current', 'Otros']
 const METHODS = ['Transferencia', 'Tarjeta débito', 'Tarjeta crédito', 'Efectivo', 'Otro']
 
 const emptyItem = { name: '', base_price_usd: '', tax_percent: '', commission_percent: '', quantity: 1 }
@@ -59,6 +59,11 @@ function formatInvoice(num) {
     return num ? `#${String(num).padStart(4, '0')}` : '—'
 }
 
+function getLocalDateString() {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 export default function Orders() {
     const [searchParams, setSearchParams] = useSearchParams()
     const navigate = useNavigate()
@@ -97,7 +102,7 @@ export default function Orders() {
 
     const openCreate = () => {
         setEditingOrder(null)
-        setForm({ ...emptyOrder, client_id: filterClientId || '', items: [{ ...emptyItem }] })
+        setForm({ ...emptyOrder, order_date: getLocalDateString(), client_id: filterClientId || '', items: [{ ...emptyItem }] })
         setShowModal(true)
     }
 
@@ -146,7 +151,7 @@ export default function Orders() {
         try {
             const payload = {
                 ...form,
-                order_date: form.order_date ? new Date(form.order_date).toISOString() : undefined,
+                order_date: form.order_date ? form.order_date : undefined,
                 items: form.items.map((i) => ({
                     name: i.name,
                     base_price_usd: parseFloat(i.base_price_usd) || 0,
@@ -351,7 +356,7 @@ export default function Orders() {
                                         </td>
                                         <td style={{ fontWeight: 600 }}>{o.client?.name || '—'}</td>
                                         <td style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-                                            {o.order_date ? new Date(o.order_date).toLocaleDateString('es-CL') : '—'}
+                                            {o.order_date ? o.order_date.split('T')[0].split('-').reverse().join('-') : '—'}
                                         </td>
                                         <td>
                                             <select className={`badge ${getPaymentBadgeClass(o.payment_status)}`}
