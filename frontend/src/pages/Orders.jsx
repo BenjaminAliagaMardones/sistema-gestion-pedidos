@@ -8,7 +8,7 @@ import toast from 'react-hot-toast'
 
 const PAYMENT_STATUS_OPTIONS = ['Pendiente', 'Pagado']
 const ORDER_STATUS_OPTIONS = ['En Bodega', 'Enviado']
-const BANKS = ['Global 66', 'Current', 'Otros']
+const BANKS = ['Global 66', 'Currency Bird', 'directo', 'Otros']
 const METHODS = ['Transferencia', 'Tarjeta débito', 'Tarjeta crédito', 'Efectivo', 'Otro']
 
 const emptyItem = { name: '', base_price_usd: '', tax_percent: '', commission_percent: '', quantity: 1 }
